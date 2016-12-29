@@ -9,6 +9,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -22,7 +23,7 @@
 
 #ifdef DEBUG
 #undef DEBUG
-#define DEBUG(f, args...) printf(f,##args)
+#define DEBUG(f, args...) do { printf("%s:%d: ", __func__, __LINE__); printf(f,##args); } while(0)
 #else
 #define DEBUG(f, args...)
 #endif
@@ -164,7 +165,7 @@ static unsigned char *fru_decode_6bit(const fru_field_t *field)
 	s6 = field->data;
 
 	len = FRU_6BIT_FULLLENGTH(len6bit);
-	if(!(out = malloc(len + 1))) {
+	if (!(out = malloc(len + 1))) {
 		return out;
 	}
 	DEBUG("Allocated a destination buffer at %p\n", out);
@@ -215,18 +216,18 @@ fru_field_t * fru_encode_data(int len, const uint8_t *data)
 	fru_field_t *out;
 
 	typelen = fru_get_typelen(len, data);
-	if(FRU_FIELD_TERMINATOR == typelen)
+	if (FRU_FIELD_TERMINATOR == typelen)
 		return NULL; // Can't encode this data
 
-	if(FRU_ISTYPE(typelen, ASCII_6BIT)) {
+	if (FRU_ISTYPE(typelen, ASCII_6BIT)) {
 		out = fru_encode_6bit(data);
 	}
 	else {
-		if(!(out = malloc(FRU_FIELDSIZE(typelen) + 1))) // Plus 1 byte for null-terminator
+		if (!(out = malloc(FRU_FIELDSIZE(typelen) + 1))) // Plus 1 byte for null-terminator
 			return NULL;
 
 		out->typelen = typelen;
-		if(FRU_ISTYPE(typelen, BCDPLUS)) {
+		if (FRU_ISTYPE(typelen, BCDPLUS)) {
 			int i;
 			uint8_t c[2] = {0};
 
@@ -268,16 +269,16 @@ unsigned char * fru_decode_data(const fru_field_t *field)
 {
 	unsigned char * out;
 
-	if(!field) return NULL;
+	if (!field) return NULL;
 
-	if(FRU_ISTYPE(field->typelen, ASCII_6BIT)) {
+	if (FRU_ISTYPE(field->typelen, ASCII_6BIT)) {
 		out = fru_decode_6bit(field);
 	}
 	else {
 		out = malloc(FRU_FIELDDATALEN(field->typelen) + 1);
-		if(!out) return NULL;
+		if (!out) return NULL;
 
-		if(FRU_ISTYPE(field->typelen, BCDPLUS)) {
+		if (FRU_ISTYPE(field->typelen, BCDPLUS)) {
 			int i;
 			uint8_t c;
 			/* Copy the data and pack it as BCD */
@@ -333,13 +334,13 @@ gettimeofday time
  * For a pre-existing area this method returns zero if checksum is ok or non-zero otherwise.
  *
  */
-uint8_t fru_area_checksum(fru_area_t *area)
+uint8_t fru_area_checksum(fru_sized_area_t *area)
 {
 	int i;
 	uint8_t checksum = 0;
 	uint8_t *data = (uint8_t *)area;
 
-	for (i = 0; i < area->blocks * 8; i++) {
+	for (i = 0; i < area->blocks * FRU_BLOCK_SZ; i++) {
 		checksum += data[i];
 	}
 
@@ -362,14 +363,14 @@ uint8_t fru_area_checksum(fru_area_t *area)
  *
  * Don't forget to free() the returned buffer when you don't need it anymore.
  *
- * @returns fru_area_t *area A newly allocated buffer containing the created area
+ * @returns fru_sized_area_t *area A newly allocated buffer containing the created area
  *
  */
 static
-fru_area_t *fru_create_area(fru_area_type_t atype,    ///< [in] Area type (FRU_[CHASSIS|BOARD|PRODUCT]_INFO)
-                            uint8_t lang,             ///< [in] Language code for area types that use it (board, product)
-                            const struct timeval *tv, ///< [in] Manufacturing time since the Epoch (1970/01/01 00:00:00 +0000 UTC) for areas that use it (board)
-                            fru_reclist_t *fields)   ///< [in] Single-linked list of data fields
+fru_sized_area_t *fru_create_sized_area(fru_area_type_t atype,    ///< [in] Area type (FRU_[CHASSIS|BOARD|PRODUCT]_INFO)
+                                        uint8_t lang,             ///< [in] Language code for area types that use it (board, product)
+                                        const struct timeval *tv, ///< [in] Manufacturing time since the Epoch (1970/01/01 00:00:00 +0000 UTC) for areas that use it (board)
+                                        fru_reclist_t *fields)   ///< [in] Single-linked list of data fields
 {
 	int i;
 	int typelen;
@@ -377,17 +378,23 @@ fru_area_t *fru_create_area(fru_area_type_t atype,    ///< [in] Area type (FRU_[
 	fru_board_area_t header = { // Allocate the biggest possible header
 		.ver = FRU_VER_1,
 	};
-	int headerlen = FRU_GENERIC_AREA_HEADER_SZ; // Assume the header to be the smallest possible
-	fru_area_t *out = NULL;
+	int headerlen = FRU_SIZED_AREA_HEADER_SZ; // Assume a smallest possible header
+	void *out = NULL;
 	uint8_t *outp;
 	fru_reclist_t *field = fields;
+	int totalsize = 2; // Assume it's a sized area and so it has size field and a custom fields terminator
 
-	if(FRU_AREA_HAS_LANG(atype)) {
+	if (!FRU_AREA_HAS_SIZE(atype)) {
+		errno = EINVAL; // This function doesn't support multirecord or internal use areas
+		goto err;
+	}
+
+	if (FRU_AREA_HAS_LANG(atype)) {
 		header.lang = lang;
 		headerlen = FRU_LANG_AREA_HEADER_SZ; // Expand the header size
 	}
 
-	if(FRU_AREA_HAS_DATE(atype)) {
+	if (FRU_AREA_HAS_DATE(atype)) {
 		uint32_t fru_time;
 		struct tm tm_1996 = {
 			.tm_year = 96,
@@ -396,7 +403,7 @@ fru_area_t *fru_create_area(fru_area_type_t atype,    ///< [in] Area type (FRU_[
 		};
 		struct timeval tv_1996 = { 0 };
 
-		if(!tv) {
+		if (!tv) {
 			errno = EFAULT;
 			goto err;
 		}
@@ -410,24 +417,28 @@ fru_area_t *fru_create_area(fru_area_type_t atype,    ///< [in] Area type (FRU_[
 		headerlen = FRU_DATE_AREA_HEADER_SZ; // Expand the header size
 	}
 
-	int totalsize = headerlen + 1 + 1; // Account for the checksum byte and a custom fields terminator
+	DEBUG("headerlen is %d\n", headerlen);
+
+	totalsize += headerlen;
 
 	for (field = fields; field && field->rec; field = field->next) {
 		totalsize += FRU_FIELDSIZE(field->rec->typelen);
 	}
-	header.blocks = (totalsize + 7) / 8; // Round up to multiple of 8 bytes
-	padding_size = header.blocks * 8 - totalsize;
+	header.blocks = FRU_BLOCKS(totalsize); // Round up to multiple of 8 bytes
+	padding_size = header.blocks * FRU_BLOCK_SZ - totalsize;
 
-	out = malloc(header.blocks * 8); // This will be returned and freed by the caller
-	bzero(out, header.blocks * 8);
+	out = malloc(FRU_BYTES(header.blocks)); // This will be returned and freed by the caller
+	bzero(out, FRU_BYTES(header.blocks));
+	outp = out;
 
 	if (!out) goto err;
-
-	outp = (uint8_t *)out;
 
 	// Now fill the output buffer. First copy the header.
 	memcpy(outp, &header, headerlen);
 	outp += headerlen;
+	
+	DEBUG("area size is %d (%d) bytes\n", totalsize, FRU_BYTES(header.blocks));
+	DEBUG("area size in header is (%d) bytes\n", FRU_BYTES(((fru_sized_area_t *)out)->blocks));
 
 	// Add the data fields
 	for (field = fields; field && field->rec; field = field->next) {
@@ -438,6 +449,9 @@ fru_area_t *fru_create_area(fru_area_type_t atype,    ///< [in] Area type (FRU_[
 	*outp = FRU_FIELD_TERMINATOR;
 	outp += 1 + padding_size;
 	*outp = fru_area_checksum(out);
+
+	DEBUG("area size is %d (%d) bytes\n", totalsize, FRU_BYTES(header.blocks));
+	DEBUG("area size in header is (%d) bytes\n", FRU_BYTES(((fru_sized_area_t *)out)->blocks));
 
 err:
 	return out;
@@ -458,7 +472,7 @@ err:
  *
  * Don't forget to free() the returned buffer when you don't need it anymore.
  *
- * @returns fru_area_t *area A newly allocated buffer containing the created area
+ * @returns fru_sized_area_t *area A newly allocated buffer containing the created area
  *
  */
 fru_board_area_t * fru_board_info(uint8_t lang,                ///< [in] Language code
@@ -471,20 +485,20 @@ fru_board_area_t * fru_board_info(uint8_t lang,                ///< [in] Languag
                                   fru_reclist_t *cust)         ///< [in] Single-linked list of custom fields
 {
 	int i;
-	fru_reclist_t fields[5] = {
-		{
+	fru_reclist_t fields[] = { // List of fields. Mandatory fields are unallocated yet.
+		{    // mfg
 			NULL,
 			&fields[1]
-		}, {
+		}, { // pname
 			NULL,
 			&fields[2]
-		}, {
+		}, { // serial
 			NULL,
 			&fields[3]
-		}, {
+		}, { // pn
 			NULL,
 			&fields[4]
-		}, {
+		}, { // file
 			NULL,
 			cust
 		}
@@ -498,11 +512,12 @@ fru_board_area_t * fru_board_info(uint8_t lang,                ///< [in] Languag
 
 	/* Find uninitialized mandatory fields, allocate and count them */
 	for (field_count = -1, field = &fields[0]; field && !field->rec; field = field->next) {
-		field->rec = fru_encode_data(LEN_AUTO, strings[++field_count]);
-		if(!field->rec) goto err;
+		field_count++;
+		field->rec = fru_encode_data(LEN_AUTO, strings[field_count]);
+		if (!field->rec) goto err;
 	}
 
-	out = (fru_board_area_t *)fru_create_area(FRU_BOARD_INFO, lang, tv, fields);
+	out = (fru_board_area_t *)fru_create_sized_area(FRU_BOARD_INFO, lang, tv, fields);
 
 err:
 
@@ -514,6 +529,172 @@ err:
 	return out;
 }
 
+/**
+ * Allocate and build a Product Information Area block.
+ *
+ * The function will allocate a buffer of size that is a muliple of 8 bytes
+ * and is big enough to accomodate the standard area header, all the mandatory
+ * fields, all the supplied custom fields, the required padding and a checksum byte.
+ *
+ * The mandatory fields will be encoded as fits best.
+ * The custom fields will be used as is (pre-encoded).
+ *
+ * It is safe to free (deallocate) any arguments supplied to this function
+ * immediately after the call as all the data is copied to the new buffer.
+ *
+ * Don't forget to free() the returned buffer when you don't need it anymore.
+ *
+ * @returns fru_sized_area_t *area A newly allocated buffer containing the created area
+ *
+ */
+fru_product_area_t * fru_product_info(uint8_t lang,                ///< [in] Language code
+                                      const unsigned char *mfg,    ///< [in] Manufacturer name
+                                      const unsigned char *pname,  ///< [in] Product name
+                                      const unsigned char *pn,     ///< [in] Part number
+                                      const unsigned char *ver,    ///< [in] Product version
+                                      const unsigned char *serial, ///< [in] Serial number
+                                      const unsigned char *atag,   ///< [in] Asset Tag
+                                      const unsigned char *file,   ///< [in] FRU File ID
+                                      fru_reclist_t *cust)         ///< [in] Single-linked list of custom fields
+{
+	int i;
+	fru_reclist_t fields[] = { // List of fields. Mandatory fields are unallocated yet.
+		{    // mfg
+			NULL,
+			&fields[1]
+		}, { // pname
+			NULL,
+			&fields[2]
+		}, { // pn
+			NULL,
+			&fields[3]
+		}, { // ver
+			NULL,
+			&fields[4]
+		}, { // serial
+			NULL,
+			&fields[5]
+		}, { // atag
+			NULL,
+			&fields[6]
+		}, { // custom fields list
+			NULL,
+			cust
+		}
+	};
+	fru_reclist_t *field = &fields[0];
+
+	const unsigned char *strings[] = { mfg, pname, pn, ver, serial, atag, file };
+	fru_product_area_t *out = NULL;
+
+	int field_count;
+
+	/* Find uninitialized mandatory fields, allocate and count them */
+	for (field_count = -1, field = &fields[0]; field && !field->rec; field = field->next) {
+		field->rec = fru_encode_data(LEN_AUTO, strings[++field_count]);
+		if (!field->rec) goto err;
+	}
+
+	out = (fru_product_area_t *)fru_create_sized_area(FRU_PRODUCT_INFO, lang, NULL, fields);
+
+err:
+
+	/* Free the allocated mandatory field */
+	for (; field_count >= 0; field_count--) {
+		free(fields[field_count--].rec);
+	}
+
+	return out;
+}
+/**
+ * Create a FRU information file.
+ *
+ * @param[in] area  The array of 5 areas, each may be NULL.
+ *                  Areas must be given in the FRU order, which is:
+ *                  internal use, chassis, board, product, multirecord
+ * @param[out] size On success, the size of the newly created FRU information buffer, in 8-byte blocks
+ *
+ * @returns fru_t * buffer, a newly allocated buffer containing the created FRU information file
+ */
+fru_t * fru_create(fru_area_t area[FRU_MAX_AREAS], size_t *size)
+{
+	fru_t fruhdr = { .ver = FRU_VER_1 };
+	int totalblocks = FRU_BLOCKS(sizeof(fru_t)); // Start with just the header size
+	int area_offsets[FRU_MAX_AREAS] = { // Indices must match values of fru_area_type_t
+		offsetof(fru_t, internal),
+		offsetof(fru_t, chassis),
+		offsetof(fru_t, board),
+		offsetof(fru_t, product),
+		offsetof(fru_t, multirec)
+	};
+	fru_t *out = NULL;
+	int i;
+
+	// First calculate the total size of the FRU information storage file to be allocated.
+	for(i = 0; i < FRU_MAX_AREAS; i++) {
+		uint8_t atype = area[i].atype;
+		uint8_t blocks = area[i].blocks;
+		fru_sized_area_t *data = area[i].data;
+
+		// Area type must be valid and match the index
+		if (!FRU_IS_ATYPE_VALID(atype) || atype != (uint8_t)FRU_AREA_NOT_PRESENT && atype != i) {
+			errno = EINVAL;
+			return NULL;
+		}
+
+		int area_offset_index = area_offsets[atype];
+		uint8_t *offset = (uint8_t *)&fruhdr + area_offset_index;
+
+		if(!data ||                                // No data is provided or
+		   !FRU_AREA_HAS_SIZE(atype) && !blocks || // no size is given for a non-sized area or
+		   !((fru_sized_area_t *)data)->blocks     // the sized area contains a zero size
+		  ) {
+			// Mark the area as
+			*offset = 0;
+			continue;
+		}
+
+		if(!blocks) {
+			blocks = data->blocks;
+			area[i].blocks = blocks;
+		}
+
+		*offset = totalblocks;
+		totalblocks += blocks;
+	}
+
+	out = malloc(FRU_BYTES(totalblocks));
+
+	DEBUG("alocated a buffer at %p\n", out);
+	if (!out) return NULL;
+	
+	bzero(out, FRU_BYTES(totalblocks));
+
+	memcpy(out, (uint8_t *)&fruhdr, sizeof(fruhdr));
+
+	// Now go through the areas again and copy them into the allocated buffer.
+	// We have all the offsets and sizes set in the previous loop.
+	for(i = 0; i < FRU_MAX_AREAS; i++) {
+		uint8_t atype = area[i].atype;
+		uint8_t blocks = area[i].blocks;
+		uint8_t *data = area[i].data;
+		int area_offset_index = area_offsets[atype];
+		uint8_t *offset = (uint8_t *)&fruhdr + area_offset_index;
+		uint8_t *dst = (void *)out + FRU_BYTES(*offset);
+
+		if (!blocks) continue;
+
+		DEBUG("copying %d bytes of area of type %d to offset 0x%03X (0x%03lX)\n",
+		      FRU_BYTES(blocks), atype, FRU_BYTES(*offset), dst - (uint8_t *)out
+		      );
+		memcpy(dst, data, FRU_BYTES(blocks));
+	}
+
+	*size = totalblocks;
+	return out;
+}
+
+
 #ifdef __STANDALONE__
 
 void dump(int len, const unsigned char *data)
@@ -521,7 +702,7 @@ void dump(int len, const unsigned char *data)
 	int i;
 	printf("Data Dump:");
 	for (i = 0; i < len; i++) {
-		if(!(i % 16)) printf("\n%04X:  ", i);
+		if (!(i % 16)) printf("\n%04X:  ", i);
 		printf("%02X ", data[i]);
 	}
 	printf("\n");
@@ -555,13 +736,13 @@ void test_encodings(void)
 
 		printf("Data set %d.\n", i);
 		printf("Original data ");
-		if(test_lengths[i]) dump(test_lengths[i], test_strings[i]);
+		if (test_lengths[i]) dump(test_lengths[i], test_strings[i]);
 		else printf(": [%s]\n", test_strings[i]);
 
 		printf("Original type: %s\n", test_types[i]);
 		printf("Encoding... ");
 		field = fru_encode_data(test_lengths[i], test_strings[i]);
-		if(FRU_FIELD_TERMINATOR == field->typelen) {
+		if (FRU_FIELD_TERMINATOR == field->typelen) {
 			printf("FAIL!\n\n");
 			continue;
 		}
@@ -588,13 +769,13 @@ void test_encodings(void)
 		printf("Decoding... ");
 
 		out = fru_decode_data(field);
-		if(!out) {
+		if (!out) {
 			printf("FAIL!");
 			goto next;
 		}
 
 		printf("Decoded data ");
-		if(FRU_ISTYPE(field->typelen, BINARY)) {
+		if (FRU_ISTYPE(field->typelen, BINARY)) {
 			dump(FRU_FIELDDATALEN(field->typelen), out);
 		}
 		else {
@@ -621,6 +802,7 @@ next:
 int main(int argc, char *argv[])
 {
 	fru_board_area_t *bi;
+	fru_product_area_t *pi;
 	struct timeval now;
 	fru_reclist_t *cust = NULL;
 #if 0
@@ -632,12 +814,7 @@ int main(int argc, char *argv[])
 	now.tv_sec += timezone;
 
 	int fd, fd2;
-	fd = open("frux.bin", O_CREAT | O_WRONLY);
-	DEBUG("fd = %d\n", fd);
-	if(fd < 0) perror("open");
-	if(0 > write(fd, "\x01\x00\x00\x01\x00\x00\x00\xFE", 8))
-		perror("write1");
-	DEBUG("fd = %d\n", fd);
+
 
 	bi = fru_board_info(LANG_ENGLISH,
 	                    &now,
@@ -650,16 +827,61 @@ int main(int argc, char *argv[])
 	                    );
 
 	printf("Board area checksum is ");
-	if(!fru_area_checksum((fru_area_t *)bi)) {
+	if (!fru_area_checksum((fru_sized_area_t *)bi)) {
 		printf("OK\n");
 	}
 	else {
 		printf("WRONG\n");
 	}
 
-	if (0 > write(fd, bi, bi->blocks * 8))
+	pi = fru_product_info(LANG_ENGLISH,
+	                      "FASTWEL Group Co. Ltd.",
+	                      "CPC503 Product",
+	                      "CPC503",
+	                      "1.2",
+	                      "25161256",
+	                      "Home office",
+	                      "file2.dat",
+	                      NULL);
+	printf("Product area checksum is ");
+	if (!fru_area_checksum((fru_sized_area_t *)pi)) {
+		printf("OK\n");
+	}
+	else {
+		printf("WRONG\n");
+	}
+
+	fru_t *fru;
+	size_t size;
+	fru_area_t areas[FRU_MAX_AREAS] = {
+		{ .atype = FRU_INTERNAL_USE },
+		{ .atype = FRU_CHASSIS_INFO },
+		{ .atype = FRU_BOARD_INFO, .data = bi },
+		{ .atype = FRU_PRODUCT_INFO, .data = pi },
+		{ .atype = FRU_MULTIRECORD }
+	};
+	fru = fru_create(areas, &size);
+	if (!fru) {
+		perror("fru_create");
+		goto err;
+		exit(1);
+	}
+
+	printf("Writing %lu bytes of FRU data.\n", FRU_BYTES(size));
+	
+	fd = open("frux.bin", O_CREAT | O_TRUNC | O_WRONLY, 0644);
+
+	if (fd < 0)
+		perror("open");
+
+	if (0 > write(fd, fru, FRU_BYTES(size)))
 		perror("write2");
-//	dump(bi->blocks * 8, (uint8_t *)bi);
+
+	free(fru);
+
+err:
+	free(pi);
+	free(bi);
 #endif
 }
 #endif
