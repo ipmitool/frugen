@@ -1,2 +1,6 @@
-add_executable(frugen fru.c)
-target_compile_definitions(frugen PUBLIC __STANDALONE__)
+add_executable(frugen frugen.c)
+add_library(fru STATIC fru.c)
+target_link_libraries(frugen fru)
+target_compile_options(fru PUBLIC -g3 -O0)
+target_compile_options(frugen PUBLIC -g3 -O0)
+#target_compile_definitions(frugen PUBLIC __STANDALONE__)

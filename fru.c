@@ -23,6 +23,7 @@
 
 #ifdef DEBUG
 #undef DEBUG
+#include <stdio.h>
 #define DEBUG(f, args...) do { printf("%s:%d: ", __func__, __LINE__); printf(f,##args); } while(0)
 #else
 #define DEBUG(f, args...)
@@ -46,10 +47,13 @@ uint8_t fru_get_typelen(int len,             /**< [in] Length of the data or LEN
 	uint8_t typelen = 0;
 	int i;
 
+	if (!data)
+		return FRU_FIELD_EMPTY;
+
 	if (!len) {
 		len = strlen(data);
-		if (!len) { // A zero length string yields a null typelen field
-			return typelen;
+		if (!len) {
+			return FRU_FIELD_EMPTY;
 		}
 	}
 
@@ -486,22 +490,11 @@ fru_board_area_t * fru_board_info(uint8_t lang,                ///< [in] Languag
 {
 	int i;
 	fru_reclist_t fields[] = { // List of fields. Mandatory fields are unallocated yet.
-		{    // mfg
-			NULL,
-			&fields[1]
-		}, { // pname
-			NULL,
-			&fields[2]
-		}, { // serial
-			NULL,
-			&fields[3]
-		}, { // pn
-			NULL,
-			&fields[4]
-		}, { // file
-			NULL,
-			cust
-		}
+		[FRU_BOARD_MFG]      = { NULL, &fields[FRU_BOARD_PRODNAME] },
+		[FRU_BOARD_PRODNAME] = { NULL, &fields[FRU_BOARD_SERIAL] },
+		[FRU_BOARD_SERIAL]   = { NULL, &fields[FRU_BOARD_PARTNO] },
+		[FRU_BOARD_PARTNO]   = { NULL, &fields[FRU_BOARD_FILE] },
+		[FRU_BOARD_FILE]     = { NULL, cust },
 	};
 	fru_reclist_t *field = &fields[0];
 
@@ -513,8 +506,13 @@ fru_board_area_t * fru_board_info(uint8_t lang,                ///< [in] Languag
 	/* Find uninitialized mandatory fields, allocate and count them */
 	for (field_count = -1, field = &fields[0]; field && !field->rec; field = field->next) {
 		field_count++;
-		field->rec = fru_encode_data(LEN_AUTO, strings[field_count]);
-		if (!field->rec) goto err;
+		if (field_count >= ARRAY_SZ(strings))
+			break;
+
+		if (!field->rec) {
+			field->rec = fru_encode_data(LEN_AUTO, strings[field_count]);
+			if (!field->rec) goto err;
+		}
 	}
 
 	out = (fru_board_area_t *)fru_create_sized_area(FRU_BOARD_INFO, lang, tv, fields);
@@ -559,28 +557,13 @@ fru_product_area_t * fru_product_info(uint8_t lang,                ///< [in] Lan
 {
 	int i;
 	fru_reclist_t fields[] = { // List of fields. Mandatory fields are unallocated yet.
-		{    // mfg
-			NULL,
-			&fields[1]
-		}, { // pname
-			NULL,
-			&fields[2]
-		}, { // pn
-			NULL,
-			&fields[3]
-		}, { // ver
-			NULL,
-			&fields[4]
-		}, { // serial
-			NULL,
-			&fields[5]
-		}, { // atag
-			NULL,
-			&fields[6]
-		}, { // custom fields list
-			NULL,
-			cust
-		}
+		[FRU_PROD_MFG]     = { NULL, &fields[FRU_PROD_NAME] },
+		[FRU_PROD_NAME]    = { NULL, &fields[FRU_PROD_MODELPN] },
+		[FRU_PROD_MODELPN] = { NULL, &fields[FRU_PROD_VERSION] },
+		[FRU_PROD_VERSION] = { NULL, &fields[FRU_PROD_SERIAL] },
+		[FRU_PROD_SERIAL]  = { NULL, &fields[FRU_PROD_ASSET] },
+		[FRU_PROD_ASSET]   = { NULL, &fields[FRU_PROD_FILE] },
+		[FRU_PROD_FILE]    = { NULL, cust },
 	};
 	fru_reclist_t *field = &fields[0];
 
@@ -591,8 +574,14 @@ fru_product_area_t * fru_product_info(uint8_t lang,                ///< [in] Lan
 
 	/* Find uninitialized mandatory fields, allocate and count them */
 	for (field_count = -1, field = &fields[0]; field && !field->rec; field = field->next) {
-		field->rec = fru_encode_data(LEN_AUTO, strings[++field_count]);
-		if (!field->rec) goto err;
+		field_count++;
+		if (field_count >= ARRAY_SZ(strings))
+			break;
+
+		if (!field->rec) {
+			field->rec = fru_encode_data(LEN_AUTO, strings[field_count]);
+			if (!field->rec) goto err;
+		}
 	}
 
 	out = (fru_product_area_t *)fru_create_sized_area(FRU_PRODUCT_INFO, lang, NULL, fields);
@@ -730,7 +719,7 @@ void test_encodings(void)
 	};
 	int test_lengths[] = { LEN_AUTO, LEN_AUTO, LEN_AUTO, LEN_AUTO, 18 };
 
-	for(i = 0; i < sizeof(test_strings) / sizeof(test_strings[0]); i++) {
+	for(i = 0; i < ARRAY_SZ(test_strings); i++) {
 		fru_field_t *field;
 		const unsigned char *out;
 

@@ -2,9 +2,14 @@
  *  @brief Header for FRU information helper functions
  */
 
+#ifndef __FRULIB_FRU_H__
+#define __FRULIB_FRU_H__
+
 #include <stdint.h>
 #include <string.h>
 #include <sys/time.h>
+
+#define ARRAY_SZ(a) (sizeof(a) / sizeof((a)[0]))
 
 typedef struct fru_s {
 	uint8_t ver:4, rsvd:4;
@@ -27,6 +32,30 @@ typedef enum fru_area_type_e {
 	FRU_MULTIRECORD,
 	FRU_MAX_AREAS
 } fru_area_type_t;
+
+typedef enum {
+	FRU_CHASSIS_TYPE,
+	FRU_CHASSIS_PARTNO,
+	FRU_CHASSIS_SERIAL
+} fru_chassis_field_t;
+
+typedef enum {
+	FRU_BOARD_MFG,
+	FRU_BOARD_PRODNAME,
+	FRU_BOARD_SERIAL,
+	FRU_BOARD_PARTNO,
+	FRU_BOARD_FILE
+} fru_board_field_t;
+
+typedef enum {
+	FRU_PROD_MFG,
+	FRU_PROD_NAME,
+	FRU_PROD_MODELPN,
+	FRU_PROD_VERSION,
+	FRU_PROD_SERIAL,
+	FRU_PROD_ASSET,
+	FRU_PROD_FILE
+} fru_prod_field_t;
 
 #define FRU_IS_ATYPE_VALID(t) ((t) >= FRU_AREA_NOT_PRESENT && (t) < FRU_MAX_AREAS)
 
@@ -140,3 +169,15 @@ fru_board_area_t * fru_board_info(uint8_t lang,
                                   const unsigned char *pn,
                                   const unsigned char *file,
                                   fru_reclist_t *cust);
+fru_product_area_t * fru_product_info(uint8_t lang,
+                                      const unsigned char *mfg,
+                                      const unsigned char *pname,
+                                      const unsigned char *pn,
+                                      const unsigned char *ver,
+                                      const unsigned char *serial,
+                                      const unsigned char *atag,
+                                      const unsigned char *file,
+                                      fru_reclist_t *cust);
+fru_t * fru_create(fru_area_t area[FRU_MAX_AREAS], size_t *size);
+
+#endif // __FRULIB_FRU_H__
