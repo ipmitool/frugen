@@ -2,8 +2,6 @@
  *  @brief FRU information helper functions
  */
 
-#define DEBUG
-
 #include "fru.h"
 #include <stdint.h>
 #include <ctype.h>
@@ -807,10 +805,10 @@ int main(int argc, char *argv[])
 
 	bi = fru_board_info(LANG_ENGLISH,
 	                    &now,
-	                    "FASTWEL Group Co. Ltd.",
-	                    "CPC503 Cool Device",
+	                    "MyCompany Ltd.",
+	                    "My Company's Cool Device",
 	                    "25160123",
-	                    "CPC503",
+	                    "XYZ-1234.12",
 	                    "",
 	                    cust
 	                    );
