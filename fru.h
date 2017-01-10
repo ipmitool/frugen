@@ -6,6 +6,7 @@
 #define __FRULIB_FRU_H__
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
 
@@ -34,7 +35,6 @@ typedef enum fru_area_type_e {
 } fru_area_type_t;
 
 typedef enum {
-	FRU_CHASSIS_TYPE,
 	FRU_CHASSIS_PARTNO,
 	FRU_CHASSIS_SERIAL
 } fru_chassis_field_t;
@@ -75,6 +75,25 @@ typedef struct fru_reclist_s {
 	fru_field_t *rec;
 	struct fru_reclist_s *next;
 } fru_reclist_t;
+
+static inline fru_reclist_t *add_reclist(fru_reclist_t *reclist)
+{
+	fru_reclist_t *rec;
+	rec = malloc(sizeof(*rec));
+	if(!rec) return NULL;
+	bzero(rec, sizeof(*rec));
+
+	// If the reclist is empty, simply return the new entry
+	if(!reclist) return rec;
+
+	// If the reclist is not empty, find the last entry and append the new one as next
+	while(reclist->next)
+		reclist = reclist->next;
+
+	reclist->next = rec;
+	return rec;
+}
+#define free_reclist(recp) while(recp) { fru_reclist_t *next = recp->next; free(recp); recp = next; }
 
 #define FRU_VER_1    1
 #define FRU_MINIMUM_AREA_HEADER \
