@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
 	struct timeval board_tv;
 	gettimeofday(&board_tv, NULL);
 
-	uint8_t chassis_type = SMBIOS_UNKNOWN;
+	uint8_t chassis_type = SMBIOS_CHASSIS_UNKNOWN;
 	const char *chassis[] = {
 		[FRU_CHASSIS_PARTNO] = NULL,
 		[FRU_CHASSIS_SERIAL] = NULL,
@@ -140,11 +140,11 @@ int main(int argc, char *argv[])
 	};
 
 	const char *option_help[] = {
-		['b'] = "Mark the next --*-custom option's argument as binary.\n"
-			    "Use hex string representation for the next custom argument.\n"
-			    "\n"
+		['b'] = "Mark the next --*-custom option's argument as binary.\n\t\t"
+			    "Use hex string representation for the next custom argument.\n\t\t"
+			    "\n\t\t"
 			    "Example: frugen --binary --board-custom 0012DEADBEAF\n"
-			    "\n"
+			    "\n\t\t"
 			    "There must be an even number of characters in a 'binary' argument",
 		['v'] = "Increase program verbosity (debug) level",
 		['h'] = "Display this help",
@@ -152,11 +152,11 @@ int main(int argc, char *argv[])
 		['t'] = "Set chassis type (hex). Defaults to 0x02 ('Unknown')",
 		['a'] = "Set chassis part number",
 		['c'] = "Set chassis serial number",
-		['C'] = "Add a custom chassis information field, may be used mupltiple times",
+		['C'] = "Add a custom chassis information field, may be used multiple times",
 		/* Board info area related options */
 		['n'] = "Set board product name",
 		['m'] = "Set board manufacturer name",
-		['d'] = "Set board manufacturing date/time, use \"DD/MM/YYYY HH:MM:SS\" format.\n"
+		['d'] = "Set board manufacturing date/time, use \"DD/MM/YYYY HH:MM:SS\" format.\n\t\t"
 		        "By default the current system date/time is used",
 		['p'] = "Set board part number",
 		['s'] = "Set board serial number",
@@ -179,7 +179,6 @@ int main(int argc, char *argv[])
 	     has_multirec = false;
 
 	do {
-		bool option_supported = false; // TODO: Remove this when all options are supported
 		fru_reclist_t **custom = NULL;
 		lindex = -1;
 		opt = getopt_long(argc, argv, "bvht:a:c:C:n:m:d:p:s:f:B:N:G:M:V:S:F:P:", options, &lindex);
@@ -187,12 +186,10 @@ int main(int argc, char *argv[])
 			case 'b': // binary
 				debug(2, "Next custom field will be considered binary");
 				cust_binary = true;
-				option_supported = true;
 				break;
 			case 'v': // verbose
 				debug_level++;
 				debug(debug_level, "Verbosity level set to %d", debug_level);
-				option_supported = true;
 				break;
 			case 'h': // help
 				printf("FRU Generator v%s (c) 2016, Alexander Amelkin <alexander@amelkin.msk.ru>\n", VERSION);
@@ -201,39 +198,49 @@ int main(int argc, char *argv[])
 					   "\n"
 					   "Options:\n\n");
 				for (i = 0; i < ARRAY_SZ(options); i++) {
-					printf("--%s%s\n-%c%s\n", options[i].name,
+					printf("\t--%s%s\n\t-%c%s\n", options[i].name,
 						                      options[i].has_arg ? " <argument>" : "",
 						                      options[i].val,
 						                      options[i].has_arg ? " <argument>" : "");
-					printf("%s.\n\n", option_help[options[i].val]);
+					printf("\t\t%s.\n\n", option_help[options[i].val]);
 				}
+				printf("Example:\n"
+				       "\tfrugen --board-mfg \"Biggest International Corp.\" \\\n"
+				       "\t       --board-prodname \"Some Cool Product\" \\\n"
+				       "\t       --board-part \"BRD-PN-123\" \\\n"
+				       "\t       --board-date \"10/1/2017 12:58:00\" \\\n"
+				       "\t       --board-serial \"01171234\" \\\n"
+				       "\t       --board-file \"Command Line\" \\\n"
+				       "\t       --binary --board-custom \"01020304FEAD1E\" \\\n"
+				       "\t       fru.bin\n");
 				exit(0);
 				break;
 
 			case 't': // chassis-type
+				chassis_type = strtol(optarg, NULL, 16);
+				debug(2, "Chassis type will be set to 0x%02X from [%s]", chassis_type, optarg);
 				has_chassis = true;
 				break;
 			case 'a': // chassis-pn
+				chassis[FRU_CHASSIS_PARTNO] = optarg;
 				has_chassis = true;
 				break;
 			case 'c': // chassis-sn
+				chassis[FRU_CHASSIS_SERIAL] = optarg;
 				has_chassis = true;
 				break;
 			case 'C': // chassis-custom
 				debug(2, "Custom chassis field [%s]", optarg);
 				has_chassis = true;
 				custom = &chassis_cust;
-				option_supported = true;
 				break;
 			case 'n': // board-name
 				board[FRU_BOARD_PRODNAME] = optarg;
 				has_board = true;
-				option_supported = true;
 				break;
 			case 'm': // board-mfg
 				board[FRU_BOARD_MFG] = optarg;
 				has_board = true;
-				option_supported = true;
 				break;
 			case 'd': { // board-date
 					struct tm tm;
@@ -249,64 +256,58 @@ int main(int argc, char *argv[])
 					board_tv.tv_sec = time + timezone; // Convert to UTC
 					board_tv.tv_usec = 0;
 					has_board = true;
-					option_supported = true;
 				}
 				break;
 			case 'p': // board-part
 				board[FRU_BOARD_PARTNO] = optarg;
 				has_board = true;
-				option_supported = true;
 				break;
 			case 's': // board-serial
 				board[FRU_BOARD_SERIAL] = optarg;
 				has_board = true;
-				option_supported = true;
 				break;
 			case 'f': // board-file
 				board[FRU_BOARD_FILE] = optarg;
 				has_board = true;
-				option_supported = true;
 				break;
 			case 'B': // board-custom
 				debug(2, "Custom board field [%s]", optarg);
 				has_board = true;
 				custom = &board_cust;
-				option_supported = true;
 				break;
 			case 'N': // prod-name
+				product[FRU_PROD_NAME] = optarg;
 				has_product = true;
 				break;
 			case 'G': // prod-mfg
+				product[FRU_PROD_MFG] = optarg;
 				has_product = true;
 				break;
 			case 'M': // prod-modelpn
+				product[FRU_PROD_MODELPN] = optarg;
 				has_product = true;
 				break;
 			case 'V': // prod-version
+				product[FRU_PROD_VERSION] = optarg;
 				has_product = true;
 				break;
 			case 'S': // prod-serial
+				product[FRU_PROD_SERIAL] = optarg;
 				has_product = true;
 				break;
 			case 'F': // prod-file
+				product[FRU_PROD_FILE] = optarg;
 				has_product = true;
 				break;
 			case 'P': // prod-custom
 				debug(2, "Custom product field [%s]", optarg);
 				has_product = true;
 				custom = &prod_cust;
-				option_supported = true;
 				break;
 			case '?':
 				exit(1);
 			default:
 				break;
-		}
-		if (opt != -1 && !option_supported) {
-			if(lindex >= 0)
-				fatal("Option '--%s' is valid but is not yet supported", options[lindex].name);
-			else
-				fatal("Option '-%c' is valid but is not yet supported", opt);
 		}
 
 		if (custom) {
@@ -354,7 +355,32 @@ int main(int argc, char *argv[])
 	fname = argv[optind];
 	debug(1, "FRU info data will be stored in %s", fname);
 
+	if (has_internal) {
+		fatal("Internal use area is not yet supported in the library");
+	}
+
+	if (has_chassis) {
+		int e;
+		fru_chassis_area_t *ci = NULL;
+		debug(1, "FRU file will have a chassis information area");
+		debug(3, "Chassis information area's custom field list is %p", chassis_cust);
+		ci = fru_chassis_info(chassis_type,
+		                      chassis[FRU_CHASSIS_PARTNO],
+		                      chassis[FRU_CHASSIS_SERIAL],
+		                      chassis_cust);
+		e = errno;
+		free_reclist(chassis_cust);
+
+		if (ci)
+			areas[FRU_CHASSIS_INFO].data = ci;
+		else {
+			errno = e;
+			fatal("Error allocating a chassis info area: %m");
+		}
+	}
+
 	if (has_board) {
+		int e;
 		fru_board_area_t *bi = NULL;
 		debug(1, "FRU file will have a board information area");
 		debug(3, "Board information area's custom field list is %p", board_cust);
@@ -366,18 +392,19 @@ int main(int argc, char *argv[])
 							board[FRU_BOARD_PARTNO],
 							board[FRU_BOARD_FILE],
 							board_cust);
-
+		e = errno;
 		free_reclist(board_cust);
 
 		if (bi)
 			areas[FRU_BOARD_INFO].data = bi;
 		else {
-			perror("Error allocating a board info area");
-			exit(1);
+			errno = e;
+			fatal("Error allocating a board info area: %m");
 		}
 	}
 
 	if (has_product) {
+		int e;
 		fru_product_area_t *pi = NULL;
 		debug(1, "FRU file will have a product information area");
 		debug(3, "Product information area's custom field list is %p", prod_cust);
@@ -391,20 +418,24 @@ int main(int argc, char *argv[])
 							  product[FRU_PROD_FILE],
 							  prod_cust);
 
+		e = errno;
 		free_reclist(prod_cust);
 
 		if (pi)
 			areas[FRU_PRODUCT_INFO].data = pi;
 		else {
-			perror("Error allocating a product info area");
-			exit(1);
+			errno = e;
+			fatal("Error allocating a product info area: %m");
 		}
+	}
+
+	if (has_multirec) {
+		fatal("Multirecord area is not yet supported in the library");
 	}
 
 	fru = fru_create(areas, &size);
 	if (!fru) {
-		perror("Error allocating a FRU file buffer");
-		exit(1);
+		fatal("Error allocating a FRU file buffer: %m");
 	}
 
 	debug(1, "Writing %lu bytes of FRU data", FRU_BYTES(size));

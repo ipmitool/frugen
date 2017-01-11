@@ -99,50 +99,42 @@ static inline fru_reclist_t *add_reclist(fru_reclist_t *reclist)
 #define FRU_MINIMUM_AREA_HEADER \
 	uint8_t ver:4, rsvd:4;  /**< Area format version */
 
-#define FRU_GENERIC_AREA_HEADER \
+#define FRU_INFO_AREA_HEADER \
 	FRU_MINIMUM_AREA_HEADER; \
-	uint8_t blocks            /**< Size in 8-byte blocks */
-
+	uint8_t blocks;         /**< Size in 8-byte blocks */ \
+	uint8_t langtype        /**< Area language code or chassis type (from smbios.h) */
 
 #define LANG_DEFAULT 0
 #define LANG_ENGLISH 25
-#define FRU_LANG_AREA_HEADER \
-	FRU_GENERIC_AREA_HEADER; \
-	uint8_t lang       /**< Area language code */
 
-typedef struct fru_sized_area_s { // The generic area structure
-	FRU_GENERIC_AREA_HEADER;
+typedef struct fru_info_area_s { // The generic info area structure
+	FRU_INFO_AREA_HEADER;
 	uint8_t data[];
-} fru_sized_area_t;
+} fru_info_area_t;
 
-#define FRU_SIZED_AREA_HEADER_SZ sizeof(fru_sized_area_t)
-
-typedef fru_sized_area_t fru_chassis_area_t; /* The chassis area doesn't have any fixed fields beyond generic header */
+#define FRU_INFO_AREA_HEADER_SZ sizeof(fru_info_area_t)
 
 typedef struct fru_internal_use_area_s {
 	FRU_MINIMUM_AREA_HEADER;
 	uint8_t data[];
 } fru_internal_use_area_t;
 
+typedef fru_info_area_t fru_chassis_area_t;
+
 typedef struct fru_board_area_s {
-	FRU_LANG_AREA_HEADER;
+	FRU_INFO_AREA_HEADER;
 	uint8_t mfgdate[3]; ///< Manufacturing date/time in seconds since 1996/1/1 0:00
 	uint8_t data[];     ///< Variable size (multiple of 8 bytes) data with tail padding and checksum
 } fru_board_area_t;
 
-typedef struct fru_product_area_s {
-	FRU_LANG_AREA_HEADER;
-	uint8_t data[];
-} fru_product_area_t;
-
-#define FRU_AREA_HAS_LANG(t) (FRU_BOARD_INFO == (t) || FRU_PRODUCT_INFO == (t))
-#define FRU_LANG_AREA_HEADER_SZ sizeof(fru_product_area_t)
+typedef fru_info_area_t fru_product_area_t;
 
 #define FRU_AREA_HAS_DATE(t) (FRU_BOARD_INFO == (t))
 #define FRU_DATE_AREA_HEADER_SZ sizeof(fru_board_area_t)
 
 #define FRU_AREA_HAS_SIZE(t) (FRU_INTERNAL_USE < (t) && (t) < FRU_MULTIRECORD)
-#define FRU_HAS_HEADER(t)    (FRU_MULTIRECORD != (t))
+#define FRU_AREA_HAS_HEADER(t) (FRU_MULTIRECORD != (t))
+#define FRU_AREA_IS_GENERIC(t) FRU_AREA_HAS_SIZE(t)
 
 #define __TYPE_BITS_SHIFT     6
 #define __TYPE_BITS_MASK      0xC0
@@ -180,6 +172,10 @@ static inline uint8_t fru_field_copy(void *dest, const fru_field_t *fieldp)
 uint8_t fru_get_typelen(int len, const uint8_t *data);
 fru_field_t * fru_encode_data(int len, const uint8_t *data);
 unsigned char * fru_decode_data(const fru_field_t *field);
+fru_chassis_area_t * fru_chassis_info(uint8_t type,
+                                      const unsigned char *pn,
+                                      const unsigned char *serial,
+                                      fru_reclist_t *cust);
 fru_board_area_t * fru_board_info(uint8_t lang,
                                   const struct timeval *tv,
                                   const unsigned char *mfg,
