@@ -1,0 +1,40 @@
+{
+	"internal" : null,
+	"chassis" : {
+		"type": 10,
+		"pn" : "CHAS-C00L-12",
+		"serial": "45678",
+		"custom" : [
+			{ "data" : "Auto-typed text custom field" },
+			{ "type" : "binary", "data": "B14A87" }
+		]
+	},
+	"board" : {
+		/* "date" : "1/10/2016 3:00:45",*/
+		"mfg" : "Biggest International Corp.",
+		"pname" : "Some Cool Product",
+		"sn" : "123456",
+		"pn" : "BRD-PN-345",
+		"file" : "example1.json",
+		"custom" : [
+			{ "type" : "binary", "data" : "0123DEADBABE" },
+			{ "type" : "auto",   "data" : "This is a text custom field" },
+			{ "type" : "auto",   "data" : "This is test2" }
+		]
+	},
+	"product" : {
+		"lang": 1,
+		"mfg" : "Super OEM Company",
+		"pname" : "Label-engineered Super Product",
+		"serial" : "OEM12345",
+		"atag" : "Accounting Dept.",
+		"file" : "example2.json",
+		"custom" : [
+			{ "type" : "auto",   "data" : "Product Custom 1" },
+			{ "type" : "auto",   "data" : "PRDCSTM" },
+			{ "type" : "auto",   "data" : "PRDCSTM2" },
+			{ "type" : "binary", "data" : "C001BEEF" }
+		]
+	},
+	"multirecord" : null
+}

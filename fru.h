@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <json/json.h>
 
 #define ARRAY_SZ(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -76,21 +77,32 @@ typedef struct fru_reclist_s {
 	struct fru_reclist_s *next;
 } fru_reclist_t;
 
-static inline fru_reclist_t *add_reclist(fru_reclist_t *reclist)
+/**
+ * @name add_reclist
+ * @brief Allocate a new reclist entry and add it to \a reclist,
+ *        Set reclist to point to the newly allocated entry if
+ *        reclist was NULL.
+ * @returns Pointer to the added entry
+ */
+static inline fru_reclist_t *add_reclist(fru_reclist_t **reclist)
 {
 	fru_reclist_t *rec;
+	fru_reclist_t *reclist_ptr = *reclist;
 	rec = malloc(sizeof(*rec));
 	if(!rec) return NULL;
 	bzero(rec, sizeof(*rec));
 
-	// If the reclist is empty, simply return the new entry
-	if(!reclist) return rec;
+	// If the reclist is empty, update it
+	if(!reclist_ptr) {
+		*reclist = rec;
+	} else {
+		// If the reclist is not empty, find the last entry and append the new one as next
+		while(reclist_ptr->next)
+			reclist_ptr = reclist_ptr->next;
 
-	// If the reclist is not empty, find the last entry and append the new one as next
-	while(reclist->next)
-		reclist = reclist->next;
+		reclist_ptr->next = rec;
+	}
 
-	reclist->next = rec;
 	return rec;
 }
 #define free_reclist(recp) while(recp) { fru_reclist_t *next = recp->next; free(recp); recp = next; }
@@ -146,6 +158,8 @@ typedef fru_info_area_t fru_product_area_t;
 /** FRU field type. Any of BINARY, BCDPLUS, ASCII_6BIT or TEXT. */
 #define FRU_MAKETYPE(x)        (__TYPE_##x << __TYPE_BITS_SHIFT)
 #define FRU_FIELDDATALEN(x)   ((x) & ~__TYPE_BITS_MASK)
+#define FRU_FIELDMAXLEN       FRU_FIELDDATALEN(UINT8_MAX)
+#define FRU_FIELDMAXSTRLEN    (FRU_FIELDDATALEN(UINT8_MAX) + 1)
 #define FRU_FIELDSIZE(typelen) (FRU_FIELDDATALEN(typelen) + sizeof(fru_field_t))
 #define FRU_TYPELEN(t, l)     (FRU_MAKETYPE(t) | FRU_FIELDDATALEN(l))
 #define FRU_TYPE(t)           (((t) & __TYPE_BITS_MASK) >> __TYPE_BITS_SHIFT)
@@ -162,37 +176,42 @@ typedef fru_info_area_t fru_product_area_t;
 #define FRU_BYTES(blocks) ((blocks) * FRU_BLOCK_SZ)
 #define FRU_BLOCKS(bytes)  (((bytes) + FRU_BLOCK_SZ - 1) / FRU_BLOCK_SZ)
 
-/** Copy a FRU area field to a buffer and return the field's size */
-static inline uint8_t fru_field_copy(void *dest, const fru_field_t *fieldp)
-{
-	memcpy(dest, (void *)fieldp, FRU_FIELDSIZE(fieldp->typelen));
-	return FRU_FIELDSIZE(fieldp->typelen);
-}
+typedef struct {
+	uint8_t type;
+	unsigned char pn[FRU_FIELDMAXSTRLEN];
+	unsigned char serial[FRU_FIELDMAXSTRLEN];
+	fru_reclist_t *cust;
+} fru_exploded_chassis_t;
 
-uint8_t fru_get_typelen(int len, const uint8_t *data);
+typedef struct {
+	uint8_t lang;
+	struct timeval tv;
+	unsigned char mfg[FRU_FIELDMAXSTRLEN];
+	unsigned char pname[FRU_FIELDMAXSTRLEN];
+	unsigned char serial[FRU_FIELDMAXSTRLEN];
+	unsigned char pn[FRU_FIELDMAXSTRLEN];
+	unsigned char file[FRU_FIELDMAXSTRLEN];
+	fru_reclist_t *cust;
+} fru_exploded_board_t;
+
+typedef struct {
+	uint8_t lang;
+	unsigned char mfg[FRU_FIELDMAXSTRLEN];
+	unsigned char pname[FRU_FIELDMAXSTRLEN];
+	unsigned char pn[FRU_FIELDMAXSTRLEN];
+	unsigned char ver[FRU_FIELDMAXSTRLEN];
+	unsigned char serial[FRU_FIELDMAXSTRLEN];
+	unsigned char atag[FRU_FIELDMAXSTRLEN];
+	unsigned char file[FRU_FIELDMAXSTRLEN];
+	fru_reclist_t *cust;
+} fru_exploded_product_t;
+
+#define fru_loadfield(eafield, value) strncpy(eafield, value, FRU_FIELDMAXLEN)
+
+fru_chassis_area_t * fru_chassis_info(const fru_exploded_chassis_t *chassis);
+fru_board_area_t * fru_board_info(const fru_exploded_board_t *board);
+fru_product_area_t * fru_product_info(const fru_exploded_product_t *product);
 fru_field_t * fru_encode_data(int len, const uint8_t *data);
-unsigned char * fru_decode_data(const fru_field_t *field);
-fru_chassis_area_t * fru_chassis_info(uint8_t type,
-                                      const unsigned char *pn,
-                                      const unsigned char *serial,
-                                      fru_reclist_t *cust);
-fru_board_area_t * fru_board_info(uint8_t lang,
-                                  const struct timeval *tv,
-                                  const unsigned char *mfg,
-                                  const unsigned char *pname,
-                                  const unsigned char *serial,
-                                  const unsigned char *pn,
-                                  const unsigned char *file,
-                                  fru_reclist_t *cust);
-fru_product_area_t * fru_product_info(uint8_t lang,
-                                      const unsigned char *mfg,
-                                      const unsigned char *pname,
-                                      const unsigned char *pn,
-                                      const unsigned char *ver,
-                                      const unsigned char *serial,
-                                      const unsigned char *atag,
-                                      const unsigned char *file,
-                                      fru_reclist_t *cust);
 fru_t * fru_create(fru_area_t area[FRU_MAX_AREAS], size_t *size);
 
 #endif // __FRULIB_FRU_H__

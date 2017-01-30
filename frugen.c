@@ -15,6 +15,10 @@
 #include "fru.h"
 #include "smbios.h"
 
+#ifdef __HAS_JSON__
+#include <json/json.h>
+#endif
+
 #define fatal(fmt, args...) do {  \
 	fprintf(stderr, fmt, ##args); \
 	fprintf(stderr, "\n");        \
@@ -58,6 +62,145 @@ long hex2byte(char *hex) {
 	return ((hi << 4) | lo);
 }
 
+#ifdef __HAS_JSON__
+bool json_fill_fru_area_fields(json_object *jso, int count,
+                               const char *fieldnames[],
+                               const char *fields[])
+{
+	int i;
+	json_object *jsfield;
+	bool data_in_this_area = false;
+	for (i = 0; i < count; i++) {
+		json_object_object_get_ex(jso, fieldnames[i], &jsfield);
+		if (jsfield) {
+			const char *s = json_object_get_string(jsfield);
+			debug(2, "Field %s '%s' loaded from JSON",
+			         fieldnames[i], s);
+			fru_loadfield(fields[i], s);
+			data_in_this_area = true;
+		}
+	}
+
+	return data_in_this_area;
+}
+
+fru_field_t * fru_encode_custom_binary_field(const char *hexstr)
+{
+	int len, i;
+	uint8_t *buf;
+	fru_field_t *rec;
+	len = strlen(hexstr);
+	debug(3, "The custom field is marked as binary, length is %d", len);
+	if (len % 2)
+		fatal("Must provide even number of nibbles for binary data");
+	len /= 2;
+	buf = malloc(len);
+	if (!buf)
+		fatal("Failed to allocate a custom buffer");
+	for (i = 0; i < len; i++) {
+		long byte = hex2byte(hexstr + 2 * i);
+		debug(4, "[%d] %c %c => 0x%02lX",
+		      i, hexstr[2 * i], hexstr[2 * i + 1], byte);
+		if (byte < 0)
+			fatal("Invalid hex data provided for binary custom attribute");
+		buf[i] = byte;
+	}
+	rec = fru_encode_data(len, buf);
+	free(buf);
+	if (!rec)
+		fatal("Failed to allocate a custom field");
+
+	return rec;
+}
+
+bool json_fill_fru_area_custom(json_object *jso, fru_reclist_t **custom)
+{
+	int i, alen;
+	json_object *jsfield;
+	array_list *array;
+	bool data_in_this_area = false;
+	fru_reclist_t *custptr;
+
+	if (!custom)
+		return false;
+
+	json_object_object_get_ex(jso, "custom", &jsfield);
+	if (!jsfield)
+		return false;
+
+	array = json_object_get_array(jsfield);
+	if (!array)
+		return false;
+
+	alen = json_object_array_length(jsfield);
+	if (!alen)
+		return false;
+
+	for (i = 0; i < alen; i++) {
+		const char *type = NULL;
+		const char *data = NULL;
+		json_object *item, *ifield;
+
+		item = json_object_array_get_idx(jsfield, i);
+		if (!item) continue;
+
+		json_object_object_get_ex(item, "type", &ifield);
+		if (!ifield || !(type = json_object_get_string(ifield))) {
+			debug(3, "Using automatic text encoding for custom field %d", i);
+			type = "auto";
+		}
+
+		json_object_object_get_ex(item, "data", &ifield);
+		if (!ifield || !(data = json_object_get_string(ifield))) {
+			debug(3, "Emtpy data or no data at all found for custom field %d", i);
+			continue;
+		}
+
+		debug(4, "Custom pointer before addition was %p", *custom);
+		custptr = add_reclist(custom);
+		debug(4, "Custom pointer after addition is %p", *custom);
+
+		if (!custptr)
+			return false;
+
+		if (!strcmp(type, "binary")) {
+			custptr->rec = fru_encode_custom_binary_field(data);
+		} else {
+			custptr->rec = fru_encode_data(LEN_AUTO, data);
+		}
+
+		debug(2, "Custom field %i has been loaded from JSON at %p->rec = %p", i, *custom, (*custom)->rec);
+		data_in_this_area = true;
+	}
+
+	debug(4, "Traversing all custom fields...");
+	custptr = *custom;
+	while(custptr) {
+		debug(4, "Custom %p, next %p", custptr, custptr->next);
+		custptr = custptr->next;
+	}
+
+	return data_in_this_area;
+}
+#endif /* __HAS_JSON__ */
+
+bool datestr_to_tv(const char *datestr, struct timeval *tv)
+{
+	struct tm tm;
+	time_t time;
+	char *ret;
+
+	ret = strptime(datestr, "%d/%m/%Y%t%T", &tm);
+	if (!ret || *ret != 0)
+		return false;
+	tzset(); // Set up local timezone
+	tm.tm_isdst = -1; // Use local timezone data in mktime
+	time = mktime(&tm); // Here we have local time since local Epoch
+	tv->tv_sec = time + timezone; // Convert to UTC
+	tv->tv_usec = 0;
+	return true;
+}
+
 int main(int argc, char *argv[])
 {
 	int i;
@@ -80,52 +223,38 @@ int main(int argc, char *argv[])
 		{ .atype = FRU_MULTIRECORD }
 	};
 
-	uint8_t board_lang = LANG_ENGLISH, prod_lang = LANG_ENGLISH;
-	struct timeval board_tv;
-	gettimeofday(&board_tv, NULL);
+	fru_exploded_chassis_t chassis = { 0, .type = SMBIOS_CHASSIS_UNKNOWN };
+	fru_exploded_board_t board = { 0, .lang = LANG_ENGLISH };
+	fru_exploded_product_t product = { 0, .lang = LANG_ENGLISH };
 
-	uint8_t chassis_type = SMBIOS_CHASSIS_UNKNOWN;
-	const char *chassis[] = {
-		[FRU_CHASSIS_PARTNO] = NULL,
-		[FRU_CHASSIS_SERIAL] = NULL,
-	};
-	fru_reclist_t *chassis_cust = NULL;
-
-	const char *board[] = {
-		[FRU_BOARD_MFG]      = NULL,
-		[FRU_BOARD_PRODNAME] = NULL,
-		[FRU_BOARD_SERIAL]   = NULL,
-		[FRU_BOARD_PARTNO]   = NULL,
-		[FRU_BOARD_FILE]     = NULL,
-	};
-	fru_reclist_t *board_cust = NULL;
-
-	const char *product[] = {
-		[FRU_PROD_MFG]     = NULL,
-		[FRU_PROD_NAME]    = NULL,
-		[FRU_PROD_MODELPN] = NULL,
-		[FRU_PROD_VERSION] = NULL,
-		[FRU_PROD_SERIAL]  = NULL,
-		[FRU_PROD_ASSET]   = NULL,
-		[FRU_PROD_FILE]    = NULL,
-	};
-	fru_reclist_t *prod_cust = NULL;
+	gettimeofday(&board.tv, NULL);
 
 	struct option options[] = {
+		/* Display usage help */
+		{ .name = "help",          .val = 'h', .has_arg = false },
+
+		/* Increase verbosity */
+		{ .name = "verbose",       .val = 'v', .has_arg = false },
+
 		/* Mark the following '*-custom' data as binary */
-		{ .name = "binary",  .val = 'b', .has_arg = false },
-		{ .name = "verbose", .val = 'v', .has_arg = false },
-		{ .name = "help",    .val = 'h', .has_arg = false },
+		{ .name = "binary",        .val = 'b', .has_arg = false },
+
+		/* Set input file format to JSON */
+		{ .name = "json",          .val = 'j', .has_arg = false },
+
+		/* Set file to load the data from */
+		{ .name = "from",          .val = 'z', .has_arg = true },
+
 		/* Chassis info area related options */
-		{ .name = "chassis-type",   .val = 't', .has_arg = true },
-		{ .name = "chassis-pn",     .val = 'a', .has_arg = true },
-		{ .name = "chassis-sn",     .val = 'c', .has_arg = true },
-		{ .name = "chassis-custom", .val = 'C', .has_arg = true },
+		{ .name = "chassis-type",  .val = 't', .has_arg = true },
+		{ .name = "chassis-pn",    .val = 'a', .has_arg = true },
+		{ .name = "chassis-serial",.val = 'c', .has_arg = true },
+		{ .name = "chassis-custom",.val = 'C', .has_arg = true },
 		/* Board info area related options */
-		{ .name = "board-prodname",.val = 'n', .has_arg = true },
+		{ .name = "board-pname",   .val = 'n', .has_arg = true },
 		{ .name = "board-mfg",     .val = 'm', .has_arg = true },
 		{ .name = "board-date",    .val = 'd', .has_arg = true },
-		{ .name = "board-part",    .val = 'p', .has_arg = true },
+		{ .name = "board-pn",      .val = 'p', .has_arg = true },
 		{ .name = "board-serial",  .val = 's', .has_arg = true },
 		{ .name = "board-file",    .val = 'f', .has_arg = true },
 		{ .name = "board-custom",  .val = 'B', .has_arg = true },
@@ -136,18 +265,21 @@ int main(int argc, char *argv[])
 		{ .name = "prod-version",  .val = 'V', .has_arg = true },
 		{ .name = "prod-serial",   .val = 'S', .has_arg = true },
 		{ .name = "prod-file",     .val = 'F', .has_arg = true },
+		{ .name = "prod-atag",     .val = 'A', .has_arg = true },
 		{ .name = "prod-custom",   .val = 'P', .has_arg = true },
 	};
 
 	const char *option_help[] = {
+		['h'] = "Display this help",
+		['v'] = "Increase program verbosity (debug) level",
 		['b'] = "Mark the next --*-custom option's argument as binary.\n\t\t"
 			    "Use hex string representation for the next custom argument.\n\t\t"
 			    "\n\t\t"
 			    "Example: frugen --binary --board-custom 0012DEADBEAF\n"
 			    "\n\t\t"
 			    "There must be an even number of characters in a 'binary' argument",
-		['v'] = "Increase program verbosity (debug) level",
-		['h'] = "Display this help",
+		['j'] = "Set input text file format to JSON (default). Specify before '--from'",
+		['z'] = "Load FRU information from a text file",
 		/* Chassis info area related options */
 		['t'] = "Set chassis type (hex). Defaults to 0x02 ('Unknown')",
 		['a'] = "Set chassis part number",
@@ -169,6 +301,7 @@ int main(int argc, char *argv[])
 		['V'] = "Set product version",
 		['S'] = "Set product serial number",
 		['F'] = "Set product FRU file ID",
+		['A'] = "Set product Asset Tag",
 		['P'] = "Add a custom product information field, may be used multiple times"
 	};
 
@@ -178,10 +311,12 @@ int main(int argc, char *argv[])
 	     has_internal = false,
 	     has_multirec = false;
 
+	bool use_json = true; /* TODO: Add more input formats, consider libconfig */
+
 	do {
 		fru_reclist_t **custom = NULL;
 		lindex = -1;
-		opt = getopt_long(argc, argv, "bvht:a:c:C:n:m:d:p:s:f:B:N:G:M:V:S:F:P:", options, &lindex);
+		opt = getopt_long(argc, argv, "vh" /*"bvht:a:c:C:n:m:d:p:s:f:B:N:G:M:V:S:F:A:P:"*/, options, &lindex);
 		switch (opt) {
 			case 'b': // binary
 				debug(2, "Next custom field will be considered binary");
@@ -198,15 +333,13 @@ int main(int argc, char *argv[])
 					   "\n"
 					   "Options:\n\n");
 				for (i = 0; i < ARRAY_SZ(options); i++) {
-					printf("\t--%s%s\n\t-%c%s\n", options[i].name,
-						                      options[i].has_arg ? " <argument>" : "",
-						                      options[i].val,
+					printf("\t--%s%s\n" /* "\t-%c%s\n" */, options[i].name,
 						                      options[i].has_arg ? " <argument>" : "");
 					printf("\t\t%s.\n\n", option_help[options[i].val]);
 				}
 				printf("Example:\n"
 				       "\tfrugen --board-mfg \"Biggest International Corp.\" \\\n"
-				       "\t       --board-prodname \"Some Cool Product\" \\\n"
+				       "\t       --board-pname \"Some Cool Product\" \\\n"
 				       "\t       --board-part \"BRD-PN-123\" \\\n"
 				       "\t       --board-date \"10/1/2017 12:58:00\" \\\n"
 				       "\t       --board-serial \"01171234\" \\\n"
@@ -216,93 +349,178 @@ int main(int argc, char *argv[])
 				exit(0);
 				break;
 
+			case 'j': // json
+				use_json = true;
+				break;
+
+			case 'z': // from
+				debug(2, "Will load FRU information from file %s", optarg);
+				if (use_json) {
+#ifdef __HAS_JSON__
+					json_object *jstree, *jso, *jsfield;
+					json_object_iter iter;
+
+					debug(2, "Data format is JSON");
+					/* Allocate a new object and load contents from file */
+					jstree = json_object_from_file(optarg);
+					if (NULL == jstree)
+						fatal("Failed to load JSON FRU object from %s", optarg);
+
+					json_object_object_foreachC(jstree, iter) {
+						jso = iter.val;
+						if (!strcmp(iter.key, "internal")) {
+							debug(1, "Internal area is not yet supported, JSON object skipped");
+							continue;
+						} else if (!strcmp(iter.key, "chassis")) {
+							char *fieldname[] = { "pn", "serial" };
+							char *field[] = { chassis.pn, chassis.serial };
+							json_object_object_get_ex(jso, "type", &jsfield);
+							if (jsfield) {
+								chassis.type = json_object_get_int(jsfield);
+								debug(2, "Chassis type 0x%02X loaded from JSON", chassis.type);
+								has_chassis = true;
+							}
+							/* Now get values for the string fields */
+							has_chassis |= json_fill_fru_area_fields(jso, ARRAY_SZ(field), fieldname, field);
+							has_chassis |= json_fill_fru_area_custom(jso, &chassis.cust);
+						} else if (!strcmp(iter.key, "board")) {
+							char *fieldname[] = { "mfg", "pname", "part", "serial", "file" };
+							char *field[] = { board.mfg, board.pname, board.pn, board.serial, board.file };
+							/* Get values for non-string fields */
+#if 0 /* TODO: Language support is not implemented yet */
+							json_object_object_get_ex(jso, "lang", &jsfield);
+							if (jsfield) {
+								board.lang = json_object_get_int(jsfield);
+								debug(2, "Board language 0x%02X loaded from JSON", board.lang);
+								has_board = true;
+							}
+#endif
+							json_object_object_get_ex(jso, "date", &jsfield);
+							if (jsfield) {
+								char *date = json_object_get_string(jsfield);
+								debug(2, "Board date '%s' will be loaded from JSON", date);
+								if(!datestr_to_tv(date, &board.tv))
+									fatal("Invalid board date/time format in JSON file");
+								has_board = true;
+							}
+							/* Now get values for the string fields */
+							has_board |= json_fill_fru_area_fields(jso, ARRAY_SZ(field), fieldname, field);
+							has_board |= json_fill_fru_area_custom(jso, &board.cust);
+						} else if (!strcmp(iter.key, "product")) {
+							char *fieldname[] = { "mfg", "pname", "pn", "ver", "serial", "atag", "file" };
+							char *field[] = { product.mfg, product.pname, product.pn, product.ver,
+							                  product.serial, product.atag, product.file };
+#if 0 /* TODO: Language support is not implemented yet */
+							/* Get values for non-string fields */
+							json_object_object_get_ex(jso, "lang", &jsfield);
+							if (jsfield) {
+								product.lang = json_object_get_int(jsfield);
+								debug(2, "Product language 0x%02X loaded from JSON", product.lang);
+								has_product = true;
+							}
+#endif
+							/* Now get values for the string fields */
+							has_product |= json_fill_fru_area_fields(jso, ARRAY_SZ(field), fieldname, field);
+							has_product |= json_fill_fru_area_custom(jso, &product.cust);
+						} else if (!strcmp(iter.key, "multirecord")) {
+							debug(1, "Multirecord area is not yet supported, JSON object skipped");
+							continue;
+						}
+					}
+
+					/* Deallocate the JSON object */
+					json_object_put(jstree);
+#else
+					fatal("JSON support was disabled at compile time");
+#endif
+				}
+				else {
+					fatal("The requested input file format is not supported");
+				}
+				break;
+
 			case 't': // chassis-type
-				chassis_type = strtol(optarg, NULL, 16);
-				debug(2, "Chassis type will be set to 0x%02X from [%s]", chassis_type, optarg);
+				chassis.type = strtol(optarg, NULL, 16);
+				debug(2, "Chassis type will be set to 0x%02X from [%s]", chassis.type, optarg);
 				has_chassis = true;
 				break;
 			case 'a': // chassis-pn
-				chassis[FRU_CHASSIS_PARTNO] = optarg;
+				fru_loadfield(chassis.pn, optarg);
 				has_chassis = true;
 				break;
-			case 'c': // chassis-sn
-				chassis[FRU_CHASSIS_SERIAL] = optarg;
+			case 'c': // chassis-serial
+				fru_loadfield(chassis.serial, optarg);
 				has_chassis = true;
 				break;
 			case 'C': // chassis-custom
 				debug(2, "Custom chassis field [%s]", optarg);
 				has_chassis = true;
-				custom = &chassis_cust;
+				custom = &chassis.cust;
 				break;
-			case 'n': // board-name
-				board[FRU_BOARD_PRODNAME] = optarg;
+			case 'n': // board-pname
+				fru_loadfield(board.pname, optarg);
 				has_board = true;
 				break;
 			case 'm': // board-mfg
-				board[FRU_BOARD_MFG] = optarg;
+				fru_loadfield(board.mfg, optarg);
 				has_board = true;
 				break;
 			case 'd': { // board-date
-					struct tm tm;
-					time_t time;
-					char *ret;
 					debug(2, "Board manufacturing date will be set from [%s]", optarg);
-					ret = strptime(optarg, "%d/%m/%Y%t%T", &tm);
-					if (!ret || *ret != 0)
+					if (!datestr_to_tv(optarg, &board.tv))
 						fatal("Invalid date/time format, use \"DD/MM/YYYY HH:MM:SS\"");
-					tzset(); // Set up local timezone
-					tm.tm_isdst = -1; // Use local timezone data in mktime
-					time = mktime(&tm); // Here we have local time since local Epoch
-					board_tv.tv_sec = time + timezone; // Convert to UTC
-					board_tv.tv_usec = 0;
 					has_board = true;
 				}
 				break;
-			case 'p': // board-part
-				board[FRU_BOARD_PARTNO] = optarg;
+			case 'p': // board-pn
+				fru_loadfield(board.pn, optarg);
 				has_board = true;
 				break;
-			case 's': // board-serial
-				board[FRU_BOARD_SERIAL] = optarg;
+			case 's': // board-sn
+				fru_loadfield(board.serial, optarg);
 				has_board = true;
 				break;
 			case 'f': // board-file
-				board[FRU_BOARD_FILE] = optarg;
+				fru_loadfield(board.file, optarg);
 				has_board = true;
 				break;
 			case 'B': // board-custom
 				debug(2, "Custom board field [%s]", optarg);
 				has_board = true;
-				custom = &board_cust;
+				custom = &board.cust;
 				break;
 			case 'N': // prod-name
-				product[FRU_PROD_NAME] = optarg;
+				fru_loadfield(product.pname, optarg);
 				has_product = true;
 				break;
 			case 'G': // prod-mfg
-				product[FRU_PROD_MFG] = optarg;
+				fru_loadfield(product.mfg, optarg);
 				has_product = true;
 				break;
 			case 'M': // prod-modelpn
-				product[FRU_PROD_MODELPN] = optarg;
+				fru_loadfield(product.pn, optarg);
 				has_product = true;
 				break;
 			case 'V': // prod-version
-				product[FRU_PROD_VERSION] = optarg;
+				fru_loadfield(product.ver, optarg);
 				has_product = true;
 				break;
 			case 'S': // prod-serial
-				product[FRU_PROD_SERIAL] = optarg;
+				fru_loadfield(product.serial, optarg);
 				has_product = true;
 				break;
 			case 'F': // prod-file
-				product[FRU_PROD_FILE] = optarg;
+				fru_loadfield(product.file, optarg);
+				has_product = true;
+				break;
+			case 'A': // prod-atag
+				fru_loadfield(product.atag, optarg);
 				has_product = true;
 				break;
 			case 'P': // prod-custom
 				debug(2, "Custom product field [%s]", optarg);
 				has_product = true;
-				custom = &prod_cust;
+				custom = &product.cust;
 				break;
 			case '?':
 				exit(1);
@@ -311,39 +529,19 @@ int main(int argc, char *argv[])
 		}
 
 		if (custom) {
+			fru_reclist_t *custptr;
 			debug(3, "Adding a custom field from argument [%s]", optarg);
-			*custom = add_reclist(*custom);
+			custptr = add_reclist(custom);
 
-			if (!*custom)
+			if (!custptr)
 				fatal("Failed to allocate a custom record list entry");
 
 			if (cust_binary) {
-				int len, i;
-				uint8_t *buf;
-				len = strlen(optarg);
-				debug(3, "The custom field is marked as binary, length is %d", len);
-				if (len % 2)
-					fatal("Must provide even number of nibbles for binary data");
-				len /= 2;
-				buf = malloc(len);
-				if (!buf)
-					fatal("Failed to allocate a custom buffer");
-				for (i = 0; i < len; i++) {
-					long byte = hex2byte(optarg + 2 * i);
-					debug(4, "[%d] %c %c => 0x%02lX",
-						     i, optarg[2 * i], optarg[2 * i + 1], byte);
-					if (byte < 0)
-						fatal("Invalid hex data provided for binary custom attribute");
-					buf[i] = byte;
-				}
-				(*custom)->rec = fru_encode_data(len, buf);
-				free(buf);
-				if (!(*custom)->rec)
-					fatal("Failed to allocate a custom field");
+				custptr->rec = fru_encode_custom_binary_field(optarg);
 			}
 			else {
 				debug(3, "The custom field will be auto-typed");
-				(*custom)->rec = fru_encode_data(LEN_AUTO, optarg);
+				custptr->rec = fru_encode_data(LEN_AUTO, optarg);
 			}
 			cust_binary = false;
 		}
@@ -363,13 +561,10 @@ int main(int argc, char *argv[])
 		int e;
 		fru_chassis_area_t *ci = NULL;
 		debug(1, "FRU file will have a chassis information area");
-		debug(3, "Chassis information area's custom field list is %p", chassis_cust);
-		ci = fru_chassis_info(chassis_type,
-		                      chassis[FRU_CHASSIS_PARTNO],
-		                      chassis[FRU_CHASSIS_SERIAL],
-		                      chassis_cust);
+		debug(3, "Chassis information area's custom field list is %p", chassis.cust);
+		ci = fru_chassis_info(&chassis);
 		e = errno;
-		free_reclist(chassis_cust);
+		free_reclist(chassis.cust);
 
 		if (ci)
 			areas[FRU_CHASSIS_INFO].data = ci;
@@ -383,17 +578,10 @@ int main(int argc, char *argv[])
 		int e;
 		fru_board_area_t *bi = NULL;
 		debug(1, "FRU file will have a board information area");
-		debug(3, "Board information area's custom field list is %p", board_cust);
-		bi = fru_board_info(board_lang,
-							&board_tv,
-							board[FRU_BOARD_MFG],
-							board[FRU_BOARD_PRODNAME],
-							board[FRU_BOARD_SERIAL],
-							board[FRU_BOARD_PARTNO],
-							board[FRU_BOARD_FILE],
-							board_cust);
+		debug(3, "Board information area's custom field list is %p", board.cust);
+		bi = fru_board_info(&board);
 		e = errno;
-		free_reclist(board_cust);
+		free_reclist(board.cust);
 
 		if (bi)
 			areas[FRU_BOARD_INFO].data = bi;
@@ -407,19 +595,11 @@ int main(int argc, char *argv[])
 		int e;
 		fru_product_area_t *pi = NULL;
 		debug(1, "FRU file will have a product information area");
-		debug(3, "Product information area's custom field list is %p", prod_cust);
-		pi = fru_product_info(prod_lang,
-							  product[FRU_PROD_MFG],
-							  product[FRU_PROD_NAME],
-							  product[FRU_PROD_MODELPN],
-							  product[FRU_PROD_VERSION],
-							  product[FRU_PROD_SERIAL],
-							  product[FRU_PROD_ASSET],
-							  product[FRU_PROD_FILE],
-							  prod_cust);
+		debug(3, "Product information area's custom field list is %p", product.cust);
+		pi = fru_product_info(&product);
 
 		e = errno;
-		free_reclist(prod_cust);
+		free_reclist(product.cust);
 
 		if (pi)
 			areas[FRU_PRODUCT_INFO].data = pi;

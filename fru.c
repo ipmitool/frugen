@@ -1,5 +1,5 @@
 /** @file
- *  @brief FRU information helper functions
+ *  @brief FRU information encoding functions
  */
 
 #include "fru.h"
@@ -28,7 +28,7 @@
 #define DEBUG(f, args...)
 #endif
 
-/*
+/**
  * Strip trailing spaces
  */
 static inline void cut_tail(char *s)
@@ -37,13 +37,26 @@ static inline void cut_tail(char *s)
 	for(i = strlen(s) - 1; i >= 0 && ' ' == s[i]; i--) s[i] = 0;
 }
 
+/** Copy a FRU area field to a buffer and return the field's size */
+static inline uint8_t fru_field_copy(void *dest, const fru_field_t *fieldp)
+{
+	memcpy(dest, (void *)fieldp, FRU_FIELDSIZE(fieldp->typelen));
+	return FRU_FIELDSIZE(fieldp->typelen);
+}
+
 /**
- * \brief Detect the most suitable encoding for the string and calculate the length as well
+ * Detect the most suitable encoding for the string and calculate the length as well
+ *
+ * @returns A FRU field type/length byte, as per IPMI FRU Storage Definition, if everything was ok, or an error code.
+ * @retval FRU_FIELD_EMPTY The \a data argument was NULL
+ * @retval FRU_FIELD_TERMINATOR The data exceeded the maximum length (63 bytes)
+ *
  */
+static
 uint8_t fru_get_typelen(int len,             /**< [in] Length of the data or LEN_AUTO for pure text zero-terminated data */
                         const uint8_t *data) /**< [in] The input data */
 {
-	uint8_t typelen = 0;
+	uint8_t typelen = len;
 	int i;
 
 	if (!data)
@@ -107,6 +120,9 @@ uint8_t fru_get_typelen(int len,             /**< [in] Length of the data or LEN
 
 /**
  * Allocate a buffer and encode the input string into it as 6-bit ASCII
+ *
+ * @returns pointer to the newly allocated field buffer if allocation and encoding were successful
+ * @returns NULL if there was an error, sets errno accordingly (man malloc)
  */
 static fru_field_t *fru_encode_6bit(const unsigned char *s /**< [in] Input string */)
 {
@@ -153,7 +169,7 @@ static fru_field_t *fru_encode_6bit(const unsigned char *s /**< [in] Input strin
 }
 
 /**
- * Allocate a buffer and decode a 6-bit ASCII string into it
+ * Allocate a buffer and decode a 6-bit ASCII string from it
  */
 static unsigned char *fru_decode_6bit(const fru_field_t *field)
 {
@@ -263,11 +279,12 @@ fru_field_t * fru_encode_data(int len, const uint8_t *data)
 }
 
 /**
- * Allocate a buffer and decode the data into it.
+ * Allocate a buffer and decode the data from it.
  *
  * For binary data use FRU_FIELDDATALEN(field->typelen) to find
  * out the size of the returned buffer.
  */
+static
 unsigned char * fru_decode_data(const fru_field_t *field)
 {
 	unsigned char * out;
@@ -377,6 +394,7 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
                                       size_t nstrings,         ///< [in] Number of strings for mandatory fields
                                       const unsigned char *strings[]) ///<[in] Array of strings for mandatory fields
 {
+	int i = 0;
 	int field_count;
 	int typelen;
 	int padding_size;
@@ -495,27 +513,30 @@ err:
  * @returns fru_info_area_t *area A newly allocated buffer containing the created area
  *
  */
-fru_chassis_area_t * fru_chassis_info(uint8_t type,                ///< [in] Chassis type (from smbios.h)
-                                      const unsigned char *pn,     ///< [in] Part number
-                                      const unsigned char *serial, ///< [in] Serial number
-                                      fru_reclist_t *cust)         ///< [in] Single-linked list of custom fields
+fru_chassis_area_t * fru_chassis_info(const fru_exploded_chassis_t *chassis) ///< [in] Exploded chassis info area
 {
 	int i;
+
+	if(!chassis) {
+		errno = EFAULT;
+		return NULL;
+	}
+
 	fru_reclist_t fields[] = { // List of fields. Mandatory fields are unallocated yet.
 		[FRU_CHASSIS_PARTNO] = { NULL, &fields[FRU_CHASSIS_SERIAL] },
-		[FRU_CHASSIS_SERIAL] = { NULL, cust },
+		[FRU_CHASSIS_SERIAL] = { NULL, chassis->cust },
 	};
 
-	const unsigned char *strings[] = { pn, serial };
+	const unsigned char *strings[] = { chassis->pn, chassis->serial };
 	fru_chassis_area_t *out = NULL;
 
-	if (!SMBIOS_CHASSIS_IS_VALID(type)) {
+	if (!SMBIOS_CHASSIS_IS_VALID(chassis->type)) {
 		errno = EINVAL;
 		return NULL;
 	}
 
 	out = fru_create_info_area(FRU_CHASSIS_INFO,
-	                           type, NULL, fields,
+	                           chassis->type, NULL, fields,
 	                           ARRAY_SZ(strings), strings);
 
 	return out;
@@ -539,29 +560,28 @@ fru_chassis_area_t * fru_chassis_info(uint8_t type,                ///< [in] Cha
  * @returns fru_info_area_t *area A newly allocated buffer containing the created area
  *
  */
-fru_board_area_t * fru_board_info(uint8_t lang,                ///< [in] Language code
-                                  const struct timeval *tv,    ///< [in] Time since the Epoch (1970/01/01 00:00:00 +0000 UTC)
-                                  const unsigned char *mfg,    ///< [in] Manufacturer name
-                                  const unsigned char *pname,  ///< [in] Product name
-                                  const unsigned char *serial, ///< [in] Serial number
-                                  const unsigned char *pn,     ///< [in] Part number
-                                  const unsigned char *file,   ///< [in] FRU File ID
-                                  fru_reclist_t *cust)         ///< [in] Single-linked list of custom fields
+fru_board_area_t * fru_board_info(const fru_exploded_board_t *board) ///< [in] Exploded board information area
 {
 	int i;
+
+	if(!board) {
+		errno = EFAULT;
+		return NULL;
+	}
+
 	fru_reclist_t fields[] = { // List of fields. Mandatory fields are unallocated yet.
 		[FRU_BOARD_MFG]      = { NULL, &fields[FRU_BOARD_PRODNAME] },
 		[FRU_BOARD_PRODNAME] = { NULL, &fields[FRU_BOARD_SERIAL] },
 		[FRU_BOARD_SERIAL]   = { NULL, &fields[FRU_BOARD_PARTNO] },
 		[FRU_BOARD_PARTNO]   = { NULL, &fields[FRU_BOARD_FILE] },
-		[FRU_BOARD_FILE]     = { NULL, cust },
+		[FRU_BOARD_FILE]     = { NULL, board->cust },
 	};
 
-	const unsigned char *strings[] = { mfg, pname, serial, pn, file };
+	const unsigned char *strings[] = { board->mfg, board->pname, board->serial, board->pn, board->file };
 	fru_board_area_t *out = NULL;
 
 	out = (fru_board_area_t *)fru_create_info_area(FRU_BOARD_INFO,
-	                                               lang, tv, fields,
+	                                               board->lang, &board->tv, fields,
 	                                               ARRAY_SZ(strings), strings);
 
 	return out;
@@ -585,17 +605,15 @@ fru_board_area_t * fru_board_info(uint8_t lang,                ///< [in] Languag
  * @returns fru_info_area_t *area A newly allocated buffer containing the created area
  *
  */
-fru_product_area_t * fru_product_info(uint8_t lang,                ///< [in] Language code
-                                      const unsigned char *mfg,    ///< [in] Manufacturer name
-                                      const unsigned char *pname,  ///< [in] Product name
-                                      const unsigned char *pn,     ///< [in] Part number
-                                      const unsigned char *ver,    ///< [in] Product version
-                                      const unsigned char *serial, ///< [in] Serial number
-                                      const unsigned char *atag,   ///< [in] Asset Tag
-                                      const unsigned char *file,   ///< [in] FRU File ID
-                                      fru_reclist_t *cust)         ///< [in] Single-linked list of custom fields
+fru_product_area_t * fru_product_info(const fru_exploded_product_t *product) ///< [in] Exploded product information area
 {
 	int i;
+
+	if(!product) {
+		errno = EFAULT;
+		return NULL;
+	}
+
 	fru_reclist_t fields[] = { // List of fields. Mandatory fields are unallocated yet.
 		[FRU_PROD_MFG]     = { NULL, &fields[FRU_PROD_NAME] },
 		[FRU_PROD_NAME]    = { NULL, &fields[FRU_PROD_MODELPN] },
@@ -603,14 +621,17 @@ fru_product_area_t * fru_product_info(uint8_t lang,                ///< [in] Lan
 		[FRU_PROD_VERSION] = { NULL, &fields[FRU_PROD_SERIAL] },
 		[FRU_PROD_SERIAL]  = { NULL, &fields[FRU_PROD_ASSET] },
 		[FRU_PROD_ASSET]   = { NULL, &fields[FRU_PROD_FILE] },
-		[FRU_PROD_FILE]    = { NULL, cust },
+		[FRU_PROD_FILE]    = { NULL, product->cust },
 	};
 
-	const unsigned char *strings[] = { mfg, pname, pn, ver, serial, atag, file };
+	const unsigned char *strings[] = { product->mfg, product->pname,
+	                                   product->pn, product->ver,
+	                                   product->serial, product->atag,
+	                                   product->file };
 	fru_product_area_t *out = NULL;
 
 	out = fru_create_info_area(FRU_PRODUCT_INFO,
-	                           lang, NULL, fields,
+	                           product->lang, NULL, fields,
 	                           ARRAY_SZ(strings), strings);
 
 	return out;
@@ -810,87 +831,7 @@ next:
 
 int main(int argc, char *argv[])
 {
-	fru_board_area_t *bi;
-	fru_product_area_t *pi;
-	struct timeval now;
-	fru_reclist_t *cust = NULL;
-#if 0
 	test_encodings();
 	exit(1);
-#else
-	tzset();
-	gettimeofday(&now, NULL);
-	now.tv_sec += timezone;
-
-	int fd, fd2;
-
-
-	bi = fru_board_info(LANG_ENGLISH,
-	                    &now,
-	                    "MyCompany Ltd.",
-	                    "My Company's Cool Device",
-	                    "25160123",
-	                    "XYZ-1234.12",
-	                    "",
-	                    cust
-	                    );
-
-	printf("Board area checksum is ");
-	if (!fru_area_checksum((fru_info_area_t *)bi)) {
-		printf("OK\n");
-	}
-	else {
-		printf("WRONG\n");
-	}
-
-	pi = fru_product_info(LANG_ENGLISH,
-	                      "FASTWEL Group Co. Ltd.",
-	                      "CPC503 Product",
-	                      "CPC503",
-	                      "1.2",
-	                      "25161256",
-	                      "Home office",
-	                      "file2.dat",
-	                      NULL);
-	printf("Product area checksum is ");
-	if (!fru_area_checksum(pi)) {
-		printf("OK\n");
-	}
-	else {
-		printf("WRONG\n");
-	}
-
-	fru_t *fru;
-	size_t size;
-	fru_area_t areas[FRU_MAX_AREAS] = {
-		{ .atype = FRU_INTERNAL_USE },
-		{ .atype = FRU_CHASSIS_INFO },
-		{ .atype = FRU_BOARD_INFO, .data = bi },
-		{ .atype = FRU_PRODUCT_INFO, .data = pi },
-		{ .atype = FRU_MULTIRECORD }
-	};
-	fru = fru_create(areas, &size);
-	if (!fru) {
-		perror("fru_create");
-		goto err;
-		exit(1);
-	}
-
-	printf("Writing %lu bytes of FRU data.\n", FRU_BYTES(size));
-	
-	fd = open("frux.bin", O_CREAT | O_TRUNC | O_WRONLY, 0644);
-
-	if (fd < 0)
-		perror("open");
-
-	if (0 > write(fd, fru, FRU_BYTES(size)))
-		perror("write2");
-
-	free(fru);
-
-err:
-	free(pi);
-	free(bi);
-#endif
 }
 #endif
