@@ -41,7 +41,7 @@ volatile int debug_level = 0;
 /**
  * Convert 2 bytes of hex string into a binary byte
  */
-long hex2byte(char *hex) {
+long hex2byte(const char *hex) {
 	static const long hextable[256] = {
 		[0 ... 255] = -1,
 		['0'] = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
@@ -62,26 +62,21 @@ long hex2byte(char *hex) {
 	return ((hi << 4) | lo);
 }
 
-#ifdef __HAS_JSON__
-bool json_fill_fru_area_fields(json_object *jso, int count,
-                               const char *fieldnames[],
-                               const char *fields[])
+bool datestr_to_tv(const char *datestr, struct timeval *tv)
 {
-	int i;
-	json_object *jsfield;
-	bool data_in_this_area = false;
-	for (i = 0; i < count; i++) {
-		json_object_object_get_ex(jso, fieldnames[i], &jsfield);
-		if (jsfield) {
-			const char *s = json_object_get_string(jsfield);
-			debug(2, "Field %s '%s' loaded from JSON",
-			         fieldnames[i], s);
-			fru_loadfield(fields[i], s);
-			data_in_this_area = true;
-		}
-	}
+	struct tm tm;
+	time_t time;
+	char *ret;
 
-	return data_in_this_area;
+	ret = strptime(datestr, "%d/%m/%Y%t%T", &tm);
+	if (!ret || *ret != 0)
+		return false;
+	tzset(); // Set up local timezone
+	tm.tm_isdst = -1; // Use local timezone data in mktime
+	time = mktime(&tm); // Here we have local time since local Epoch
+	tv->tv_sec = time + timezone; // Convert to UTC
+	tv->tv_usec = 0;
+	return true;
 }
 
 fru_field_t * fru_encode_custom_binary_field(const char *hexstr)
@@ -111,6 +106,28 @@ fru_field_t * fru_encode_custom_binary_field(const char *hexstr)
 		fatal("Failed to allocate a custom field");
 
 	return rec;
+}
+
+#ifdef __HAS_JSON__
+bool json_fill_fru_area_fields(json_object *jso, int count,
+                               const char *fieldnames[],
+                               char *fields[])
+{
+	int i;
+	json_object *jsfield;
+	bool data_in_this_area = false;
+	for (i = 0; i < count; i++) {
+		json_object_object_get_ex(jso, fieldnames[i], &jsfield);
+		if (jsfield) {
+			const char *s = json_object_get_string(jsfield);
+			debug(2, "Field %s '%s' loaded from JSON",
+			         fieldnames[i], s);
+			fru_loadfield(fields[i], s);
+			data_in_this_area = true;
+		}
+	}
+
+	return data_in_this_area;
 }
 
 bool json_fill_fru_area_custom(json_object *jso, fru_reclist_t **custom)
@@ -183,23 +200,6 @@ bool json_fill_fru_area_custom(json_object *jso, fru_reclist_t **custom)
 	return data_in_this_area;
 }
 #endif /* __HAS_JSON__ */
-
-bool datestr_to_tv(const char *datestr, struct timeval *tv)
-{
-	struct tm tm;
-	time_t time;
-	char *ret;
-
-	ret = strptime(datestr, "%d/%m/%Y%t%T", &tm);
-	if (!ret || *ret != 0)
-		return false;
-	tzset(); // Set up local timezone
-	tm.tm_isdst = -1; // Use local timezone data in mktime
-	time = mktime(&tm); // Here we have local time since local Epoch
-	tv->tv_sec = time + timezone; // Convert to UTC
-	tv->tv_usec = 0;
-	return true;
-}
 
 int main(int argc, char *argv[])
 {
@@ -372,7 +372,7 @@ int main(int argc, char *argv[])
 							debug(1, "Internal area is not yet supported, JSON object skipped");
 							continue;
 						} else if (!strcmp(iter.key, "chassis")) {
-							char *fieldname[] = { "pn", "serial" };
+							const char *fieldname[] = { "pn", "serial" };
 							char *field[] = { chassis.pn, chassis.serial };
 							json_object_object_get_ex(jso, "type", &jsfield);
 							if (jsfield) {
@@ -384,7 +384,7 @@ int main(int argc, char *argv[])
 							has_chassis |= json_fill_fru_area_fields(jso, ARRAY_SZ(field), fieldname, field);
 							has_chassis |= json_fill_fru_area_custom(jso, &chassis.cust);
 						} else if (!strcmp(iter.key, "board")) {
-							char *fieldname[] = { "mfg", "pname", "part", "serial", "file" };
+							const char *fieldname[] = { "mfg", "pname", "part", "serial", "file" };
 							char *field[] = { board.mfg, board.pname, board.pn, board.serial, board.file };
 							/* Get values for non-string fields */
 #if 0 /* TODO: Language support is not implemented yet */
@@ -397,7 +397,7 @@ int main(int argc, char *argv[])
 #endif
 							json_object_object_get_ex(jso, "date", &jsfield);
 							if (jsfield) {
-								char *date = json_object_get_string(jsfield);
+								const char *date = json_object_get_string(jsfield);
 								debug(2, "Board date '%s' will be loaded from JSON", date);
 								if(!datestr_to_tv(date, &board.tv))
 									fatal("Invalid board date/time format in JSON file");
@@ -407,7 +407,7 @@ int main(int argc, char *argv[])
 							has_board |= json_fill_fru_area_fields(jso, ARRAY_SZ(field), fieldname, field);
 							has_board |= json_fill_fru_area_custom(jso, &board.cust);
 						} else if (!strcmp(iter.key, "product")) {
-							char *fieldname[] = { "mfg", "pname", "pn", "ver", "serial", "atag", "file" };
+							const char *fieldname[] = { "mfg", "pname", "pn", "ver", "serial", "atag", "file" };
 							char *field[] = { product.mfg, product.pname, product.pn, product.ver,
 							                  product.serial, product.atag, product.file };
 #if 0 /* TODO: Language support is not implemented yet */
