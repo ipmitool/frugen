@@ -16,7 +16,7 @@
 #include "smbios.h"
 
 #ifdef __HAS_JSON__
-#include <json/json.h>
+#include <json-c/json.h>
 #endif
 
 #define fatal(fmt, args...) do {  \
