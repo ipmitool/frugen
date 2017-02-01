@@ -1,4 +1,4 @@
-#define VERSION "1.0 beta"
+#define VERSION "1.0." GITHASH " beta"
 
 #define _GNU_SOURCE
 #include <getopt.h>
@@ -64,13 +64,29 @@ long hex2byte(const char *hex) {
 
 bool datestr_to_tv(const char *datestr, struct timeval *tv)
 {
-	struct tm tm;
+	struct tm tm = {0};
 	time_t time;
 	char *ret;
 
+#if __WIN32__ || __WIN64__
+	/* There is no strptime() in Windows C libraries */
+	int mday, mon, year, hour, min, sec;
+
+	if(6 != sscanf(datestr, "%d/%d/%d %d:%d:%d", &mday, &mon, &year, &hour, &min, &sec)) {
+		return false;
+	}
+
+	tm.tm_mday = mday;
+	tm.tm_mon = mon - 1;
+	tm.tm_year = year - 1900;
+	tm.tm_hour = hour;
+	tm.tm_min = min;
+	tm.tm_sec = sec;
+#else
 	ret = strptime(datestr, "%d/%m/%Y%t%T", &tm);
 	if (!ret || *ret != 0)
 		return false;
+#endif
 	tzset(); // Set up local timezone
 	tm.tm_isdst = -1; // Use local timezone data in mktime
 	time = mktime(&tm); // Here we have local time since local Epoch
@@ -620,7 +636,13 @@ int main(int argc, char *argv[])
 
 	debug(1, "Writing %lu bytes of FRU data", FRU_BYTES(size));
 
-	fd = open(fname, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+	fd = open(fname,
+#if __WIN32__ || __WIN64__
+	          O_CREAT | O_TRUNC | O_WRONLY | O_BINARY,
+#else
+	          O_CREAT | O_TRUNC | O_WRONLY,
+#endif
+	          0644);
 
 	if (fd < 0)
 		fatal("Couldn't create file %s: %m", fname);

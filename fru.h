@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
-#include <json/json.h>
 
 #define ARRAY_SZ(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -90,7 +89,7 @@ static inline fru_reclist_t *add_reclist(fru_reclist_t **reclist)
 	fru_reclist_t *reclist_ptr = *reclist;
 	rec = malloc(sizeof(*rec));
 	if(!rec) return NULL;
-	bzero(rec, sizeof(*rec));
+	memset(rec, 0, sizeof(*rec));
 
 	// If the reclist is empty, update it
 	if(!reclist_ptr) {

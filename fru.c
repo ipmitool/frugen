@@ -137,7 +137,7 @@ static fru_field_t *fru_encode_6bit(const unsigned char *s /**< [in] Input strin
 		return out;
 	}
 
-	bzero(out->data, FRU_FIELDSIZE(len6bit) + 1);
+	memset(out->data, 0, FRU_FIELDSIZE(len6bit) + 1);
 
 	out->typelen = FRU_TYPELEN(ASCII_6BIT, len6bit);
 
@@ -188,7 +188,7 @@ static unsigned char *fru_decode_6bit(const fru_field_t *field)
 		return out;
 	}
 	DEBUG("Allocated a destination buffer at %p\n", out);
-	bzero(out, len + 1);
+	memset(out, 0, len + 1);
 
 	for(i = 0, i6 = 0; i6 <= len6bit && i < len && s6[i6]; i++) {
 		int base = i / 4;
@@ -459,7 +459,7 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
 	padding_size = header.blocks * FRU_BLOCK_SZ - totalsize;
 
 	out = malloc(FRU_BYTES(header.blocks)); // This will be returned and freed by the caller
-	bzero(out, FRU_BYTES(header.blocks));
+	memset(out, 0, FRU_BYTES(header.blocks));
 	outp = out;
 
 	if (!out) goto err;
@@ -698,7 +698,7 @@ fru_t * fru_create(fru_area_t area[FRU_MAX_AREAS], size_t *size)
 	DEBUG("alocated a buffer at %p\n", out);
 	if (!out) return NULL;
 	
-	bzero(out, FRU_BYTES(totalblocks));
+	memset(out, 0, FRU_BYTES(totalblocks));
 
 	memcpy(out, (uint8_t *)&fruhdr, sizeof(fruhdr));
 
