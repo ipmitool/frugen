@@ -104,7 +104,7 @@ for all mingw32-compiled libraries (e.g., libjson-c).
 
 Once you have that file, build the tool as follows:
 
-    cmake -DCMAKE_TOOLCHAIN_FILE=~/mingw-w64-toolchain.cmake  .
+    cmake -DCMAKE_TOOLCHAIN_FILE=x86\_64-w64-mingw32-toolchain.cmake  .
     make
 
 ## Contact information
