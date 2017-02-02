@@ -243,7 +243,9 @@ int main(int argc, char *argv[])
 	fru_exploded_board_t board = { 0, .lang = LANG_ENGLISH };
 	fru_exploded_product_t product = { 0, .lang = LANG_ENGLISH };
 
+	tzset();
 	gettimeofday(&board.tv, NULL);
+	board.tv.tv_sec += timezone;
 
 	struct option options[] = {
 		/* Display usage help */
