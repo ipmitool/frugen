@@ -358,7 +358,7 @@ int main(int argc, char *argv[])
 				printf("Example:\n"
 				       "\tfrugen --board-mfg \"Biggest International Corp.\" \\\n"
 				       "\t       --board-pname \"Some Cool Product\" \\\n"
-				       "\t       --board-part \"BRD-PN-123\" \\\n"
+				       "\t       --board-pn \"BRD-PN-123\" \\\n"
 				       "\t       --board-date \"10/1/2017 12:58:00\" \\\n"
 				       "\t       --board-serial \"01171234\" \\\n"
 				       "\t       --board-file \"Command Line\" \\\n"
@@ -402,7 +402,7 @@ int main(int argc, char *argv[])
 							has_chassis |= json_fill_fru_area_fields(jso, ARRAY_SZ(field), fieldname, field);
 							has_chassis |= json_fill_fru_area_custom(jso, &chassis.cust);
 						} else if (!strcmp(iter.key, "board")) {
-							const char *fieldname[] = { "mfg", "pname", "part", "serial", "file" };
+							const char *fieldname[] = { "mfg", "pname", "pn", "serial", "file" };
 							char *field[] = { board.mfg, board.pname, board.pn, board.serial, board.file };
 							/* Get values for non-string fields */
 #if 0 /* TODO: Language support is not implemented yet */

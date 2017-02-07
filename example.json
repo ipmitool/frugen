@@ -13,7 +13,7 @@
 		/* "date" : "1/10/2016 3:00:45",*/
 		"mfg" : "Biggest International Corp.",
 		"pname" : "Some Cool Product",
-		"sn" : "123456",
+		"serial" : "123456",
 		"pn" : "BRD-PN-345",
 		"file" : "example1.json",
 		"custom" : [
