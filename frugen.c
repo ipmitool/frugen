@@ -118,8 +118,6 @@ fru_field_t * fru_encode_custom_binary_field(const char *hexstr)
 	}
 	rec = fru_encode_data(len, buf);
 	free(buf);
-	if (!rec)
-		fatal("Failed to allocate a custom field");
 
 	return rec;
 }
@@ -202,6 +200,9 @@ bool json_fill_fru_area_custom(json_object *jso, fru_reclist_t **custom)
 			custptr->rec = fru_encode_data(LEN_AUTO, data);
 		}
 
+		if (!custptr->rec) {
+			fatal("Failed to encode custom field. Memory allocation or field length problem.");
+		}
 		debug(2, "Custom field %i has been loaded from JSON at %p->rec = %p", i, *custom, (*custom)->rec);
 		data_in_this_area = true;
 	}
@@ -560,6 +561,9 @@ int main(int argc, char *argv[])
 			else {
 				debug(3, "The custom field will be auto-typed");
 				custptr->rec = fru_encode_data(LEN_AUTO, optarg);
+			}
+			if (!custptr->rec) {
+				fatal("Failed to encode custom field. Memory allocation or field length problem.");
 			}
 			cust_binary = false;
 		}
