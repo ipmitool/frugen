@@ -59,28 +59,46 @@ typedef enum {
 
 #define FRU_IS_ATYPE_VALID(t) ((t) >= FRU_AREA_NOT_PRESENT && (t) < FRU_MAX_AREAS)
 
-/* FRU Area container structure for internal library use only */
+/**
+ * FRU area description structure.
+ *
+ * Contains information about a single arbitrary area.
+ */
 typedef struct fru_area_s {
-	uint8_t atype;
-	uint8_t blocks;
-	void * data;
+	fru_area_type_t atype; /**< FRU area type */
+	uint8_t blocks; /**< Size of the data field in 8-byte blocks */
+	void * data; /**< Pointer to the actual FRU area data */
 } fru_area_t;
 
+/**
+ * Generic FRU area field header structure.
+ *
+ * Every field in chassis, board and product information areas has such a header.
+ */
 typedef struct fru_field_s {
 	uint8_t typelen;   /**< Type/length of the field */
 	uint8_t data[];    /**< The field data */
 } fru_field_t;
 
+
+/**
+ * A single-linked list of FRU area fields.
+ *
+ * This is used to describe any length chains of fields.
+ * Mandatory fields are linked first in the order they appear
+ * in the information area (as per Specification), then custom
+ * fields are linked.
+ */
 typedef struct fru_reclist_s {
-	fru_field_t *rec;
-	struct fru_reclist_s *next;
+	fru_field_t *rec; /**< A pointer to the field or NULL if not initialized */
+	struct fru_reclist_s *next; /**< The next record in the list or NULL if last */
 } fru_reclist_t;
 
 /**
- * @name add_reclist
- * @brief Allocate a new reclist entry and add it to \a reclist,
- *        Set reclist to point to the newly allocated entry if
- *        reclist was NULL.
+ * Allocate a new reclist entry and add it to \a reclist,
+ * set \a reclist to point to the newly allocated entry if
+ * \a reclist was NULL.
+ *
  * @returns Pointer to the added entry
  */
 static inline fru_reclist_t *add_reclist(fru_reclist_t **reclist)
