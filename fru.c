@@ -132,21 +132,21 @@ static fru_field_t *fru_encode_6bit(const unsigned char *s /**< [in] Input strin
 	fru_field_t *out = NULL;
 
 	if (len6bit > FRU_FIELDDATALEN(len6bit) ||
-	    !(out = malloc(FRU_FIELDSIZE(len6bit) + 1))) // One byte for null-byte
+	    !(out = malloc(sizeof(fru_field_t) + len6bit + 1))) // One byte for null-byte
 	{
 		return out;
 	}
 
-	memset(out->data, 0, FRU_FIELDSIZE(len6bit) + 1);
+	memset(out->data, 0, len6bit + 1);
 
 	out->typelen = FRU_TYPELEN(ASCII_6BIT, len6bit);
 
-	for (i = 0, i6 = 0; i < len && i6 <= len6bit; i++) {
+	for (i = 0, i6 = 0; i < len && i6 < len6bit; i++) {
 		int base = i / 4; // Four original bytes get encoded into three 6-bit-packed ones
 		int byte = i % 4;
 		char c = (s[i] - ' ') & 0x3F; // Space is zero, maximum is 0x3F (6 significant bits)
 
-		DEBUG("%d:%d = %c -> %02hhX\n", base, byte, s[i], c);
+		DEBUG("%d:%d:%d = %c -> %02hhX\n", base, byte, i6, s[i], c);
 		switch(byte) {
 			case 0:
 				out->data[i6] = c;
