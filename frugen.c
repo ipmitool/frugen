@@ -1,4 +1,6 @@
-#define VERSION "1.0." GITHASH " beta"
+#ifndef VERSION
+#define VERSION "v1.0-dirty-orphan"
+#endif
 
 #define _GNU_SOURCE
 #include <getopt.h>
@@ -346,7 +348,7 @@ int main(int argc, char *argv[])
 				debug(debug_level, "Verbosity level set to %d", debug_level);
 				break;
 			case 'h': // help
-				printf("FRU Generator v%s (c) 2016, Alexander Amelkin <alexander@amelkin.msk.ru>\n", VERSION);
+				printf("FRU Generator %s (c) 2016-2017, Alexander Amelkin <alexander@amelkin.msk.ru>\n", VERSION);
 				printf("\n"
 					   "Usage: frugen [options] <filename>\n"
 					   "\n"

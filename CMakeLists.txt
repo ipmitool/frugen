@@ -7,19 +7,24 @@ execute_process(COMMAND
 	git
 	describe
 	--always
+	--long
+	--dirty
 	WORKING_DIRECTORY
 	"${CMAKE_CURRENT_SOURCE_DIR}"
 	RESULT_VARIABLE
 	res
 	OUTPUT_VARIABLE
-	githash
+	gitver
 	ERROR_QUIET
 	OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 if(NOT res EQUAL 0)
-	set(githash "git")
+	set(gitver "UNKNOWN")
 endif()
-add_definitions(-DGITHASH="${githash}")
+
+string(REPLACE "-" "." gitver "${gitver}")
+
+add_definitions(-DVERSION="${gitver}")
 
 add_executable(frugen frugen.c)
 add_library(fru-static STATIC fru.c)
@@ -35,6 +40,7 @@ if (JSON_LIB)
 else (JSON_LIB)
 	message (WARNING "JSON library *NOT* found. JSON support *disabled*!")
 endif (JSON_LIB)
+target_compile_options(frugen PUBLIC -m32)
 #target_compile_options(fru-static PUBLIC -g3 -O0)
 #target_compile_options(frugen PUBLIC -g3 -O0)
 #target_compile_definitions(frugen PUBLIC __STANDALONE__)
