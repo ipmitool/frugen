@@ -4,6 +4,7 @@
 
 #include "fru.h"
 #include "smbios.h"
+#include <stdio.h>
 #include <stdint.h>
 #include <ctype.h>
 #include <string.h>
@@ -347,6 +348,27 @@ gettimeofday time
 #endif
 
 /**
+ * Calculate zero checksum for command header and FRU areas
+ */
+static
+uint8_t calc_checksum(void *blk, size_t blk_bytes)
+{
+    if (!blk || blk_bytes == 0) {
+        printf("Null pointer or zero buffer length\n");
+        exit(1);
+    }
+
+	uint8_t *data = (uint8_t *)blk;
+	uint8_t checksum = 0;
+
+	for(int i = 0; i < blk_bytes; i++) {
+		checksum += data[i];
+	}
+
+	return (uint8_t)( -(int8_t)checksum);
+}
+
+/**
  * Calculate an area checksum
  *
  * Calculation includes the checksum byte itself.
@@ -356,15 +378,7 @@ gettimeofday time
  */
 uint8_t fru_area_checksum(fru_info_area_t *area)
 {
-	int i;
-	uint8_t checksum = 0;
-	uint8_t *data = (uint8_t *)area;
-
-	for (i = 0; i < area->blocks * FRU_BLOCK_SZ; i++) {
-		checksum += data[i];
-	}
-
-	return (uint8_t)( -(int8_t)checksum);
+	return calc_checksum(area, (area->blocks * FRU_BLOCK_SZ));
 }
 
 /**
@@ -693,7 +707,7 @@ fru_t * fru_create(fru_area_t area[FRU_MAX_AREAS], size_t *size)
 		totalblocks += blocks;
 	}
     // Add checksum for common header
-    
+    fruhdr.hchecksum = calc_checksum(&fruhdr, sizeof(fruhdr));
 
 	out = malloc(FRU_BYTES(totalblocks));
 
