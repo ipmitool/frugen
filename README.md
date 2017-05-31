@@ -59,6 +59,13 @@ general tool limitations) in a file and use it as an input for the tool:
 An example file 'example.json' is provided for your reference.
 
 ## Building
+### json support
+
+* Offcial site:
+    * https://github.com/json-c/json-c/wiki
+
+* Install libjson-c in Ubuntu 16.04
+    sudo apt install libjson-c-dev
 
 ### Linux
 

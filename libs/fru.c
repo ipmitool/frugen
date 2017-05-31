@@ -4,6 +4,7 @@
 
 #include "fru.h"
 #include "smbios.h"
+#include <stdio.h>
 #include <stdint.h>
 #include <ctype.h>
 #include <string.h>
@@ -109,7 +110,7 @@ uint8_t fru_get_typelen(int len,             /**< [in] Length of the data or LEN
 		if (typelen < FRU_MAKETYPE(ASCII_6BIT) && // Do not reduce the range
 		    !isdigit(data[i]) && data[i] != ' ' && data[i] != '-' && data[i] != '.')
 		{
-			// The data doesn't fit into BCD plus, expand to 
+			// The data doesn't fit into BCD plus, expand to
 			DEBUG("[%c] Data is 6-bit ASCII!\n", data[i]);
 			typelen = FRU_TYPELEN(ASCII_6BIT, FRU_6BIT_LENGTH(len));
 		}
@@ -347,6 +348,27 @@ gettimeofday time
 #endif
 
 /**
+ * Calculate zero checksum for command header and FRU areas
+ */
+static
+uint8_t calc_checksum(void *blk, size_t blk_bytes)
+{
+    if (!blk || blk_bytes == 0) {
+        printf("Null pointer or zero buffer length\n");
+        exit(1);
+    }
+
+	uint8_t *data = (uint8_t *)blk;
+	uint8_t checksum = 0;
+
+    for(int i = 0; i < blk_bytes; i++) {
+        checksum += data[i];
+    }
+
+	return (uint8_t)( -(int8_t)checksum);
+}
+
+/**
  * Calculate an area checksum
  *
  * Calculation includes the checksum byte itself.
@@ -356,15 +378,7 @@ gettimeofday time
  */
 uint8_t fru_area_checksum(fru_info_area_t *area)
 {
-	int i;
-	uint8_t checksum = 0;
-	uint8_t *data = (uint8_t *)area;
-
-	for (i = 0; i < area->blocks * FRU_BLOCK_SZ; i++) {
-		checksum += data[i];
-	}
-
-	return (uint8_t)( -(int8_t)checksum);
+    return calc_checksum(area, (area->blocks * FRU_BLOCK_SZ));
 }
 
 /**
@@ -467,7 +481,7 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
 	// Now fill the output buffer. First copy the header.
 	memcpy(outp, &header, headerlen);
 	outp += headerlen;
-	
+
 	DEBUG("area size is %d (%d) bytes\n", totalsize, FRU_BYTES(header.blocks));
 	DEBUG("area size in header is (%d) bytes\n", FRU_BYTES(((fru_info_area_t *)out)->blocks));
 
@@ -692,14 +706,15 @@ fru_t * fru_create(fru_area_t area[FRU_MAX_AREAS], size_t *size)
 		*offset = totalblocks;
 		totalblocks += blocks;
 	}
+    // Add checksum for common header
+    fruhdr.hchecksum = calc_checksum(&fruhdr, sizeof(fruhdr));
 
 	out = malloc(FRU_BYTES(totalblocks));
 
 	DEBUG("alocated a buffer at %p\n", out);
 	if (!out) return NULL;
-	
-	memset(out, 0, FRU_BYTES(totalblocks));
 
+	memset(out, 0, FRU_BYTES(totalblocks));
 	memcpy(out, (uint8_t *)&fruhdr, sizeof(fruhdr));
 
 	// Now go through the areas again and copy them into the allocated buffer.
