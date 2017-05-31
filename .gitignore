@@ -43,4 +43,8 @@ Makefile
 frugen
 
 # Vim swaps
-*.swp
+.*.swp
+
+# ctags and cscope
+cscope*
+tags
