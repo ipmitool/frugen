@@ -28,8 +28,8 @@
 } while(0)
 
 volatile int debug_level = 0;
+int e;
 #define debug(level, fmt, args...) do { \
-	int e = errno;                      \
 	if(level <= debug_level) {          \
 		printf("DEBUG: ");              \
 		errno = e;                      \
@@ -53,8 +53,8 @@ long hex2byte(const char *hex) {
 
 	if (!hex) return -1;
 
-	long hi = hextable[hex[0]];
-	long lo = hextable[hex[1]];
+	long hi = hextable[(int)hex[0]];
+	long lo = hextable[(int)hex[1]];
 
 	debug(9, "hi = %02lX, lo = %02lX", hi, lo);
 
@@ -70,7 +70,7 @@ bool datestr_to_tv(const char *datestr, struct timeval *tv)
 	time_t time;
 	char *ret;
 
-#if __WIN32__ || __WIN64__
+#if defined(__WIN32__) || defined(__WIN64__)
 	/* There is no strptime() in Windows C libraries */
 	int mday, mon, year, hour, min, sec;
 
@@ -100,7 +100,7 @@ bool datestr_to_tv(const char *datestr, struct timeval *tv)
 fru_field_t * fru_encode_custom_binary_field(const char *hexstr)
 {
 	int len, i;
-	uint8_t *buf;
+	char *buf;
 	fru_field_t *rec;
 	len = strlen(hexstr);
 	debug(3, "The custom field is marked as binary, length is %d", len);
@@ -582,7 +582,6 @@ int main(int argc, char *argv[])
 	}
 
 	if (has_chassis) {
-		int e;
 		fru_chassis_area_t *ci = NULL;
 		debug(1, "FRU file will have a chassis information area");
 		debug(3, "Chassis information area's custom field list is %p", chassis.cust);
@@ -599,7 +598,6 @@ int main(int argc, char *argv[])
 	}
 
 	if (has_board) {
-		int e;
 		fru_board_area_t *bi = NULL;
 		debug(1, "FRU file will have a board information area");
 		debug(3, "Board information area's custom field list is %p", board.cust);
@@ -616,7 +614,6 @@ int main(int argc, char *argv[])
 	}
 
 	if (has_product) {
-		int e;
 		fru_product_area_t *pi = NULL;
 		debug(1, "FRU file will have a product information area");
 		debug(3, "Product information area's custom field list is %p", product.cust);
@@ -645,7 +642,7 @@ int main(int argc, char *argv[])
 	debug(1, "Writing %lu bytes of FRU data", FRU_BYTES(size));
 
 	fd = open(fname,
-#if __WIN32__ || __WIN64__
+#if defined(__WIN32__) || defined(__WIN64__)
 	          O_CREAT | O_TRUNC | O_WRONLY | O_BINARY,
 #else
 	          O_CREAT | O_TRUNC | O_WRONLY,
