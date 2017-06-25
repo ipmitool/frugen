@@ -10,7 +10,7 @@
 #include <string.h>
 #include <sys/time.h>
 
-#define ARRAY_SZ(a) (sizeof(a) / sizeof((a)[0]))
+#define ARRAY_SZ(a) ((int)(sizeof(a) / sizeof((a)[0])))
 
 typedef struct fru_s {
 	uint8_t ver:4, rsvd:4;
@@ -195,31 +195,31 @@ typedef fru_info_area_t fru_product_area_t;
 
 typedef struct {
 	uint8_t type;
-	unsigned char pn[FRU_FIELDMAXSTRLEN];
-	unsigned char serial[FRU_FIELDMAXSTRLEN];
+	char pn[FRU_FIELDMAXSTRLEN];
+	char serial[FRU_FIELDMAXSTRLEN];
 	fru_reclist_t *cust;
 } fru_exploded_chassis_t;
 
 typedef struct {
 	uint8_t lang;
 	struct timeval tv;
-	unsigned char mfg[FRU_FIELDMAXSTRLEN];
-	unsigned char pname[FRU_FIELDMAXSTRLEN];
-	unsigned char serial[FRU_FIELDMAXSTRLEN];
-	unsigned char pn[FRU_FIELDMAXSTRLEN];
-	unsigned char file[FRU_FIELDMAXSTRLEN];
+	char mfg[FRU_FIELDMAXSTRLEN];
+	char pname[FRU_FIELDMAXSTRLEN];
+	char serial[FRU_FIELDMAXSTRLEN];
+	char pn[FRU_FIELDMAXSTRLEN];
+	char file[FRU_FIELDMAXSTRLEN];
 	fru_reclist_t *cust;
 } fru_exploded_board_t;
 
 typedef struct {
 	uint8_t lang;
-	unsigned char mfg[FRU_FIELDMAXSTRLEN];
-	unsigned char pname[FRU_FIELDMAXSTRLEN];
-	unsigned char pn[FRU_FIELDMAXSTRLEN];
-	unsigned char ver[FRU_FIELDMAXSTRLEN];
-	unsigned char serial[FRU_FIELDMAXSTRLEN];
-	unsigned char atag[FRU_FIELDMAXSTRLEN];
-	unsigned char file[FRU_FIELDMAXSTRLEN];
+	char mfg[FRU_FIELDMAXSTRLEN];
+	char pname[FRU_FIELDMAXSTRLEN];
+	char pn[FRU_FIELDMAXSTRLEN];
+	char ver[FRU_FIELDMAXSTRLEN];
+	char serial[FRU_FIELDMAXSTRLEN];
+	char atag[FRU_FIELDMAXSTRLEN];
+	char file[FRU_FIELDMAXSTRLEN];
 	fru_reclist_t *cust;
 } fru_exploded_product_t;
 
@@ -228,7 +228,7 @@ typedef struct {
 fru_chassis_area_t * fru_chassis_info(const fru_exploded_chassis_t *chassis);
 fru_board_area_t * fru_board_info(const fru_exploded_board_t *board);
 fru_product_area_t * fru_product_info(const fru_exploded_product_t *product);
-fru_field_t * fru_encode_data(int len, const uint8_t *data);
+fru_field_t * fru_encode_data(int len, const char *data);
 fru_t * fru_create(fru_area_t area[FRU_MAX_AREAS], size_t *size);
 
 #endif // __FRULIB_FRU_H__

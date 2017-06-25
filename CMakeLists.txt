@@ -35,6 +35,13 @@ add_definitions(-DVERSION="${gitver}")
 # Compile options
 #############################################
 set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_C_FLAGS "-Wall -Werror -std=gnu99 -Wno-missing-braces -Wextra       \
+    -Wno-missing-field-initializers -Wformat=2 -Wswitch-default -Wswitch-enum \
+	-Wcast-align -Wpointer-arith -Wbad-function-cast -Wno-override-init       \
+    -Wstrict-overflow=5 -Wstrict-prototypes -Winline -Wundef -Wnested-externs \
+    -Wcast-qual -Wshadow -Wunreachable-code -Wlogical-op -Wfloat-equal        \
+    -Wstrict-aliasing=2 -Wredundant-decls -Wold-style-definition              \
+    -fno-omit-frame-pointer -ffloat-store -fno-common -fstrict-aliasing")
 set(CMAKE_C_FLAGS_DEBUG "-g -O0")
 
 # Test 32/64 bits, only tested on Ubuntu 16.04
