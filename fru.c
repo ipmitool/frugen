@@ -4,6 +4,7 @@
 
 #include "fru.h"
 #include "smbios.h"
+#include <stdio.h>
 #include <stdint.h>
 #include <ctype.h>
 #include <string.h>
