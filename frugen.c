@@ -642,7 +642,7 @@ int main(int argc, char *argv[])
 		fatal("Error allocating a FRU file buffer: %m");
 	}
 
-	debug(1, "Writing %lu bytes of FRU data", FRU_BYTES(size));
+	debug(1, "Writing %lu bytes of FRU data", (long unsigned int)FRU_BYTES(size));
 
 	fd = open(fname,
 #if __WIN32__ || __WIN64__
