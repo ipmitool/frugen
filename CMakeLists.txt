@@ -40,7 +40,13 @@ if (JSON_LIB)
 else (JSON_LIB)
 	message (WARNING "JSON library *NOT* found. JSON support *disabled*!")
 endif (JSON_LIB)
-target_compile_options(frugen PUBLIC -m32)
+
+# To make frugen 32-bit, uncomment the following lines or use an external toolchain file
+#set_target_properties(frugen PROPERTIES COMPILE_FLAGS "-m32" LINK_FLAGS "-m32")
+#set_target_properties(fru-static PROPERTIES COMPILE_FLAGS "-m32" LINK_FLAGS "-m32")
+#set_target_properties(fru-shared PROPERTIES COMPILE_FLAGS "-m32" LINK_FLAGS "-m32")
+
+# The following are for debugging only
 #target_compile_options(fru-static PUBLIC -g3 -O0)
 #target_compile_options(frugen PUBLIC -g3 -O0)
 #target_compile_definitions(frugen PUBLIC __STANDALONE__)
