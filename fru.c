@@ -435,6 +435,7 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
 			.tm_mon = 0,
 			.tm_mday = 1
 		};
+		const struct timeval tv_unspecified = { 0 };
 		struct timeval tv_1996 = { 0 };
 
 		if (!tv) {
@@ -442,9 +443,19 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
 			goto err;
 		}
 
-		tv_1996.tv_sec = mktime(&tm_1996); // The argument to mktime is zoneless
-
-		fru_time = (tv->tv_sec - tv_1996.tv_sec) / 60; // FRU time is in minutes and we don't care about microseconds
+		/*
+		 * It's assumed here that UNIX time 0 (Jan 1st of 1970)
+		 * can never actually happen in a FRU file in 2018.
+		 */
+		if (!memcmp(&tv_unspecified, tv, sizeof(tv))) {
+			printf("Using FRU_DATE_UNSPECIFIED\n");
+			fru_time = FRU_DATE_UNSPECIFIED;
+		} else {
+			// The argument to mktime is zoneless
+			tv_1996.tv_sec = mktime(&tm_1996);
+			// FRU time is in minutes and we don't care about microseconds
+			fru_time = (tv->tv_sec - tv_1996.tv_sec) / 60;
+		}
 		header.mfgdate[0] = fru_time         & 0xFF;
 		header.mfgdate[1] = (fru_time >> 8)  & 0xFF;
 		header.mfgdate[2] = (fru_time >> 16) & 0xFF;

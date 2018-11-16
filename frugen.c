@@ -231,6 +231,7 @@ int main(int argc, char *argv[])
 	size_t size;
 
 	bool cust_binary = false; // Flag: treat the following custom attribute as binary
+	bool no_curr_date = false; // Flag: don't use current timestamp if no 'date' is specified
 
 	const char *fname = NULL;
 
@@ -275,6 +276,7 @@ int main(int argc, char *argv[])
 		{ .name = "board-pname",   .val = 'n', .has_arg = true },
 		{ .name = "board-mfg",     .val = 'm', .has_arg = true },
 		{ .name = "board-date",    .val = 'd', .has_arg = true },
+		{ .name = "board-date-unspec", .val = 'u', .has_arg = false },
 		{ .name = "board-pn",      .val = 'p', .has_arg = true },
 		{ .name = "board-serial",  .val = 's', .has_arg = true },
 		{ .name = "board-file",    .val = 'f', .has_arg = true },
@@ -310,7 +312,8 @@ int main(int argc, char *argv[])
 		['n'] = "Set board product name",
 		['m'] = "Set board manufacturer name",
 		['d'] = "Set board manufacturing date/time, use \"DD/MM/YYYY HH:MM:SS\" format.\n\t\t"
-		        "By default the current system date/time is used",
+		        "By default the current system date/time is used unless -u is not specified",
+		['u'] = "Don't use current system date/time for board mfg. date, use 'Unspecified'",
 		['p'] = "Set board part number",
 		['s'] = "Set board serial number",
 		['f'] = "Set board FRU file ID",
@@ -328,6 +331,7 @@ int main(int argc, char *argv[])
 
 	bool has_chassis  = false,
 	     has_board    = false,
+	     has_bdate    = false,
 	     has_product  = false,
 	     has_internal = false,
 	     has_multirec = false;
@@ -337,7 +341,7 @@ int main(int argc, char *argv[])
 	do {
 		fru_reclist_t **custom = NULL;
 		lindex = -1;
-		opt = getopt_long(argc, argv, "vh" /*"bvht:a:c:C:n:m:d:p:s:f:B:N:G:M:V:S:F:A:P:"*/, options, &lindex);
+		opt = getopt_long(argc, argv, "bvht:a:c:C:n:m:d:up:s:f:B:N:G:M:V:S:F:A:P:", options, &lindex);
 		switch (opt) {
 			case 'b': // binary
 				debug(2, "Next custom field will be considered binary");
@@ -420,9 +424,10 @@ int main(int argc, char *argv[])
 							if (jsfield) {
 								const char *date = json_object_get_string(jsfield);
 								debug(2, "Board date '%s' will be loaded from JSON", date);
-								if(!datestr_to_tv(date, &board.tv))
+								if (!datestr_to_tv(date, &board.tv))
 									fatal("Invalid board date/time format in JSON file");
 								has_board = true;
+								has_bdate = true;
 							}
 							/* Now get values for the string fields */
 							has_board |= json_fill_fru_area_fields(jso, ARRAY_SZ(field), fieldname, field);
@@ -486,12 +491,14 @@ int main(int argc, char *argv[])
 				fru_loadfield(board.mfg, optarg);
 				has_board = true;
 				break;
-			case 'd': { // board-date
-					debug(2, "Board manufacturing date will be set from [%s]", optarg);
-					if (!datestr_to_tv(optarg, &board.tv))
-						fatal("Invalid date/time format, use \"DD/MM/YYYY HH:MM:SS\"");
-					has_board = true;
-				}
+			case 'd': // board-date
+				debug(2, "Board manufacturing date will be set from [%s]", optarg);
+				if (!datestr_to_tv(optarg, &board.tv))
+					fatal("Invalid date/time format, use \"DD/MM/YYYY HH:MM:SS\"");
+				has_board = true;
+				break;
+			case 'u': // board-date-unspec
+				no_curr_date = true;
 				break;
 			case 'p': // board-pn
 				fru_loadfield(board.pn, optarg);
@@ -603,6 +610,14 @@ int main(int argc, char *argv[])
 		fru_board_area_t *bi = NULL;
 		debug(1, "FRU file will have a board information area");
 		debug(3, "Board information area's custom field list is %p", board.cust);
+		debug(3, "Board date is specified? = %d", has_bdate);
+		debug(3, "Board date use unspec? = %d", no_curr_date);
+		if (!has_bdate && no_curr_date) {
+			debug(1, "Using 'unspecified' board mfg. date");
+			board.tv = (struct timeval){0};
+			dump(sizeof(board.tv), &board.tv);
+		}
+
 		bi = fru_board_info(&board);
 		e = errno;
 		free_reclist(board.cust);

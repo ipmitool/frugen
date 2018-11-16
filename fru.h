@@ -160,6 +160,7 @@ typedef fru_info_area_t fru_product_area_t;
 
 #define FRU_AREA_HAS_DATE(t) (FRU_BOARD_INFO == (t))
 #define FRU_DATE_AREA_HEADER_SZ sizeof(fru_board_area_t)
+#define FRU_DATE_UNSPECIFIED 0
 
 #define FRU_AREA_HAS_SIZE(t) (FRU_INTERNAL_USE < (t) && (t) < FRU_MULTIRECORD)
 #define FRU_AREA_HAS_HEADER(t) (FRU_MULTIRECORD != (t))
