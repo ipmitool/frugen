@@ -176,8 +176,8 @@ typedef fru_info_area_t fru_product_area_t;
 /** FRU field type. Any of BINARY, BCDPLUS, ASCII_6BIT or TEXT. */
 #define FRU_MAKETYPE(x)        (__TYPE_##x << __TYPE_BITS_SHIFT)
 #define FRU_FIELDDATALEN(x)   ((x) & ~__TYPE_BITS_MASK)
-#define FRU_FIELDMAXLEN       FRU_FIELDDATALEN(UINT8_MAX)
-#define FRU_FIELDMAXSTRLEN    (FRU_FIELDDATALEN(UINT8_MAX) + 1)
+#define FRU_FIELDMAXLEN       FRU_FIELDDATALEN(UINT8_MAX) // For FRU fields
+#define FRU_FIELDMAXARRAY     (FRU_FIELDMAXLEN + 1) // For C array allocation
 #define FRU_FIELDSIZE(typelen) (FRU_FIELDDATALEN(typelen) + sizeof(fru_field_t))
 #define FRU_TYPELEN(t, l)     (FRU_MAKETYPE(t) | FRU_FIELDDATALEN(l))
 #define FRU_TYPE(t)           (((t) & __TYPE_BITS_MASK) >> __TYPE_BITS_SHIFT)
@@ -196,31 +196,31 @@ typedef fru_info_area_t fru_product_area_t;
 
 typedef struct {
 	uint8_t type;
-	unsigned char pn[FRU_FIELDMAXSTRLEN];
-	unsigned char serial[FRU_FIELDMAXSTRLEN];
+	unsigned char pn[FRU_FIELDMAXARRAY];
+	unsigned char serial[FRU_FIELDMAXARRAY];
 	fru_reclist_t *cust;
 } fru_exploded_chassis_t;
 
 typedef struct {
 	uint8_t lang;
 	struct timeval tv;
-	unsigned char mfg[FRU_FIELDMAXSTRLEN];
-	unsigned char pname[FRU_FIELDMAXSTRLEN];
-	unsigned char serial[FRU_FIELDMAXSTRLEN];
-	unsigned char pn[FRU_FIELDMAXSTRLEN];
-	unsigned char file[FRU_FIELDMAXSTRLEN];
+	unsigned char mfg[FRU_FIELDMAXARRAY];
+	unsigned char pname[FRU_FIELDMAXARRAY];
+	unsigned char serial[FRU_FIELDMAXARRAY];
+	unsigned char pn[FRU_FIELDMAXARRAY];
+	unsigned char file[FRU_FIELDMAXARRAY];
 	fru_reclist_t *cust;
 } fru_exploded_board_t;
 
 typedef struct {
 	uint8_t lang;
-	unsigned char mfg[FRU_FIELDMAXSTRLEN];
-	unsigned char pname[FRU_FIELDMAXSTRLEN];
-	unsigned char pn[FRU_FIELDMAXSTRLEN];
-	unsigned char ver[FRU_FIELDMAXSTRLEN];
-	unsigned char serial[FRU_FIELDMAXSTRLEN];
-	unsigned char atag[FRU_FIELDMAXSTRLEN];
-	unsigned char file[FRU_FIELDMAXSTRLEN];
+	unsigned char mfg[FRU_FIELDMAXARRAY];
+	unsigned char pname[FRU_FIELDMAXARRAY];
+	unsigned char pn[FRU_FIELDMAXARRAY];
+	unsigned char ver[FRU_FIELDMAXARRAY];
+	unsigned char serial[FRU_FIELDMAXARRAY];
+	unsigned char atag[FRU_FIELDMAXARRAY];
+	unsigned char file[FRU_FIELDMAXARRAY];
 	fru_reclist_t *cust;
 } fru_exploded_product_t;
 
