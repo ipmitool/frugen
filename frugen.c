@@ -615,7 +615,6 @@ int main(int argc, char *argv[])
 		if (!has_bdate && no_curr_date) {
 			debug(1, "Using 'unspecified' board mfg. date");
 			board.tv = (struct timeval){0};
-			dump(sizeof(board.tv), &board.tv);
 		}
 
 		bi = fru_board_info(&board);
