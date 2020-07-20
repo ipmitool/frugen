@@ -221,9 +221,15 @@ bool json_fill_fru_area_custom(json_object *jso, fru_reclist_t **custom)
 #endif /* __HAS_JSON__ */
 
 static void safe_read(int fd, void *buffer, size_t length) {
-	ssize_t bytes_read = read(fd, buffer, length);
-	if (bytes_read != length)
-		fatal("Error reading file");
+    size_t total_bytes_read = 0;
+    while (total_bytes_read != length) {
+        ssize_t bytes_read = read(
+			fd, buffer + total_bytes_read, length - total_bytes_read);
+        if (bytes_read == -1)
+            fatal("Error reading file");
+
+        total_bytes_read += bytes_read;
+    }
 }
 
 static void fd_read_field(int fd, uint8_t *out) {
@@ -241,7 +247,7 @@ static void fd_read_field(int fd, uint8_t *out) {
 	if (data == NULL)
 		fatal("Could not decode field");
 
-	memcpy(out, data, strlen(data) + 1);
+	memcpy(out, data, strnlen(data, 2 *  length) + 1);
 	free(data);
 	free(field);
 }
@@ -532,9 +538,7 @@ int main(int argc, char *argv[])
 					}
 
 					char common_header[8];
-					ssize_t bytes_read = read(fd, common_header, 8);
-					if (bytes_read != 8)
-						fatal("Encountered error while reading header");
+					safe_read(fd, common_header, 8);
 
 					// Common Header Format Version = common_header[0]
 					// Internal Use Area Starting Offset = common_header[1]
