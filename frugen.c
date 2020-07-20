@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <time.h>
+#include <endian.h>
 #include <errno.h>
 #include "fru.h"
 #include "smbios.h"
@@ -93,6 +94,7 @@ bool datestr_to_tv(const char *datestr, struct timeval *tv)
 	tm.tm_isdst = -1; // Use local timezone data in mktime
 	time = mktime(&tm); // Here we have local time since local Epoch
 	tv->tv_sec = time + timezone; // Convert to UTC
+    printf("Time written: %ld\n", tv->tv_sec);
 	tv->tv_usec = 0;
 	return true;
 }
@@ -541,8 +543,8 @@ int main(int argc, char *argv[])
                     // Common Header Format Version = common_header[0]
                     // Internal Use Area Starting Offset = common_header[1]
                     uint16_t chassis_start_offset = 8 * common_header[2];
-                    uint16_t board_area_start_offset = 8 * common_header[3];
-                    uint16_t product_area_start_offset = 8 * common_header[4];
+                    uint16_t board_start_offset = 8 * common_header[3];
+                    uint16_t product_start_offset = 8 * common_header[4];
                     // MultiRecord Area Starting Offset = 8 * common_header[5]
                     // Padding = common_header[6] = 0
                     // Checksum = common_header[7]
@@ -550,17 +552,17 @@ int main(int argc, char *argv[])
                     // For the above offsets, an offset of 0 is valid and implies
                     // that the field is not present.
 
-                    has_chassis = chassis_start_offset != 0;
-                    has_board = board_start_offset != 0;
+                    bool data_has_chassis = chassis_start_offset != 0;
+                    bool data_has_board = board_start_offset != 0;
                     // has_product = product_start_offset != 0;
 
                     printf("Offsets: %u %u %u\n",
                         chassis_start_offset,
-                        board_area_start_offset,
-                        product_area_start_offset
+                        board_start_offset,
+                        product_start_offset
                     );
 
-                    if (has_chassis) {
+                    if (data_has_chassis) {
                         lseek(fd, chassis_start_offset, SEEK_SET);
 
                         uint8_t chassis_header[3];
@@ -572,6 +574,39 @@ int main(int argc, char *argv[])
                         fd_read_field(fd, chassis.pn);
                         fd_read_field(fd, chassis.serial);
                         fd_fill_custom_fields(fd, &chassis.cust);
+
+                        has_chassis = true;
+                    }
+                    if (data_has_board) {
+                        lseek(fd, board_start_offset, SEEK_SET);
+
+                        uint8_t board_header[3];
+                        safe_read(fd, board_header, 3);
+                        if (board_header[0] != 1)
+                            fatal("Unsupported Board Info Area Format Version");
+                        // Board Info Area Length = 8 * board_header[1]
+                        // TODO use the lang for text decoding??
+                        board.lang = board_header[2];
+
+                        uint32_t min_since_epoch = 0;
+                        safe_read(fd, &min_since_epoch, 3);
+                        struct tm tm_1996 = {
+                            .tm_year = 96,
+                            .tm_mon = 0,
+                            .tm_mday = 1
+                        };
+			            // The argument to mktime is zoneless
+			            board.tv.tv_sec = mktime(&tm_1996) + 60 * min_since_epoch;
+
+                        fd_read_field(fd, board.mfg);
+                        fd_read_field(fd, board.pname);
+                        fd_read_field(fd, board.serial);
+                        fd_read_field(fd, board.pn);
+                        fd_read_field(fd, board.file);
+                        fd_fill_custom_fields(fd, &board.cust);
+
+                        has_board = true;
+                        has_bdate = true;
                     }
                 }
 				else {
