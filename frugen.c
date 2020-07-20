@@ -476,7 +476,118 @@ int main(int argc, char *argv[])
 #endif
 				}
                 else if (use_binary) {
-                    fatal("Binary support not yet added");
+                    int fd = open(optarg, O_RDONLY);
+                    if (fd < 0) {
+                        perror("");
+                        fatal("Failed to open file");
+                    }
+
+                    char common_header[8];
+                    ssize_t bytes_read = read(fd, common_header, 8);
+                    if (bytes_read != 8)
+                        fatal("Encountered error while reading header");
+
+                    // Common Header Format Version = common_header[0]
+                    // Internal Use Area Starting Offset = common_header[1]
+                    uint16_t chassis_start_offset = 8 * common_header[2];
+                    uint16_t board_area_start_offset = 8 * common_header[3];
+                    uint16_t product_area_start_offset = 8 * common_header[4];
+                    // MultiRecord Area Starting Offset = 8 * common_header[5]
+                    // Padding = common_header[6] = 0
+                    // Checksum = common_header[7]
+
+                    // For the above offsets, an offset of 0 is valid and implies
+                    // that the field is not present.
+
+                    has_chassis = chassis_start_offset != 0;
+                    // has_board = board_start_offset != 0;
+                    // has_product = product_start_offset != 0;
+
+                    printf("Offsets: %u %u %u\n",
+                        chassis_start_offset,
+                        board_area_start_offset,
+                        product_area_start_offset
+                    );
+
+                    if (has_chassis) {
+                        uint8_t chassis_header[4];
+                        lseek(fd, chassis_start_offset, SEEK_SET);
+                        bytes_read = read(fd, chassis_header, 4);
+                        if (bytes_read != 4)
+                            fatal("Error reading chassis");
+
+                        if (chassis_header[0] != 1)
+                            fatal("Unsupported Chassis Info Area Format Version");
+
+                        uint16_t length = 8 * chassis_header[1];
+                        chassis.type = chassis_header[2];
+
+                        {
+                            uint8_t type_and_length = chassis_header[3];
+                            uint8_t type = (type_and_length & 0xc0) >> 6;
+                            uint8_t length = type_and_length & ~0xc0;
+                            // TODO check type, for now we assume it is 0b11
+                            if (type != 3)
+                                fatal("Unsupported data type in chassis");
+
+                            bytes_read = read(fd, chassis.pn, length);
+                            if (bytes_read != length)
+                                fatal("Error reading chassis");
+                        }
+
+                        {
+                            uint8_t type_and_length;
+                            bytes_read = read(fd, &type_and_length, 1);
+                            if (bytes_read != 1)
+                                fatal("Error reading chassis");
+
+                            uint8_t type = (type_and_length & 0xc0) >> 6;
+                            uint8_t length = type_and_length & ~0xc0;
+                            // TODO check type, for now we assume it is 0b11
+                            if (type != 3)
+                                fatal("Unsupported data type in chassis");
+
+                            bytes_read = read(fd, chassis.serial, length);
+                            if (bytes_read != length)
+                                fatal("Error reading chassis");
+                        }
+
+                        while (true) {
+                            uint8_t type_and_length;
+                            bytes_read = read(fd, &type_and_length, 1);
+                            if (bytes_read != 1)
+                                fatal("Error reading chassis");
+
+                            if (type_and_length == 0xc1) {
+                                // throw away the next byte, it's an empty field
+                                // indicating that we've reached the end
+                                lseek(fd, 1, SEEK_CUR);
+                                break;
+                            }
+
+                            fru_reclist_t *custom_field =
+                                add_reclist(&chassis.cust);
+                            if (custom_field == NULL)
+                                fatal("Error allocating custom field");
+
+
+                            uint8_t length = type_and_length & ~0xc0;
+
+                           uint8_t* data = malloc(length + 1);
+                           if (data == NULL)
+                               fatal("Error allocating custom field");
+
+                            bytes_read = read(fd, data, length);
+                            if (bytes_read != length)
+                                fatal("Error reading chassis");
+                            // Add NUL byte
+                            data[length] = 0;
+
+                            // TODO check type for binary data
+                            custom_field->rec = fru_encode_data(LEN_AUTO, data);
+                            free(data);
+                        }
+                    }
                 }
 				else {
 					fatal("The requested input file format is not supported");
