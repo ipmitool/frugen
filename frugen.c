@@ -264,6 +264,9 @@ int main(int argc, char *argv[])
 		/* Set input file format to JSON */
 		{ .name = "json",          .val = 'j', .has_arg = false },
 
+		/* Set input file format to binary */
+		{ .name = "binaryformat",          .val = 'x', .has_arg = false },
+
 		/* Set file to load the data from */
 		{ .name = "from",          .val = 'z', .has_arg = true },
 
@@ -302,6 +305,7 @@ int main(int argc, char *argv[])
 			    "\n\t\t"
 			    "There must be an even number of characters in a 'binary' argument",
 		['j'] = "Set input text file format to JSON (default). Specify before '--from'",
+		['x'] = "Set input file format to binary. Specify before '--from'",
 		['z'] = "Load FRU information from a text file",
 		/* Chassis info area related options */
 		['t'] = "Set chassis type (hex). Defaults to 0x02 ('Unknown')",
@@ -336,7 +340,8 @@ int main(int argc, char *argv[])
 	     has_internal = false,
 	     has_multirec = false;
 
-	bool use_json = true; /* TODO: Add more input formats, consider libconfig */
+	bool use_json = false; /* TODO: Add more input formats, consider libconfig */
+	bool use_binary = false;
 
 	do {
 		fru_reclist_t **custom = NULL;
@@ -376,6 +381,16 @@ int main(int argc, char *argv[])
 
 			case 'j': // json
 				use_json = true;
+                if (use_binary) {
+                    fatal("Can't specify --json and --binaryformat together");
+                }
+				break;
+
+			case 'x': // binary
+				use_binary = true;
+                if (use_json) {
+                    fatal("Can't specify --json and --binaryformat together");
+                }
 				break;
 
 			case 'z': // from
@@ -460,6 +475,9 @@ int main(int argc, char *argv[])
 					fatal("JSON support was disabled at compile time");
 #endif
 				}
+                else if (use_binary) {
+                    fatal("Binary support not yet added");
+                }
 				else {
 					fatal("The requested input file format is not supported");
 				}
