@@ -618,6 +618,8 @@ int main(int argc, char *argv[])
 
 						has_product = true;
 					}
+
+					close(fd);
 				}
 				else {
 					fatal("The requested input file format is not supported");
