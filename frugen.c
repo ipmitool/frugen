@@ -228,21 +228,13 @@ static void safe_read(int fd, void *buffer, size_t length) {
         fatal("Error reading file");
 }
 
-static inline uint8_t get_type_from_typelen(uint8_t typelen) {
-    return (typelen & 0xc0) >> 6;
-}
-
-static inline uint8_t get_length_from_typelen(uint8_t typelen) {
-    return typelen & ~0xc0;
-}
-
 static void fd_read_field(int fd, uint8_t *out) {
     uint8_t typelen;
     safe_read(fd, &typelen, 1);
     // TODO check type, for now we assume it is 0b11
-    if (get_type_from_typelen(typelen) != 3)
+    if (!FRU_ISTYPE(typelen, TEXT))
         fatal("Unsupported data type for binary format");
-    safe_read(fd, out, get_length_from_typelen(typelen));
+    safe_read(fd, out, FRU_FIELDDATALEN(typelen));
 }
 
 static void fd_fill_custom_fields(int fd, fru_reclist_t **reclist) {
@@ -260,7 +252,7 @@ static void fd_fill_custom_fields(int fd, fru_reclist_t **reclist) {
         if (custom_field == NULL)
             fatal("Error allocating custom field");
 
-        size_t length = get_length_from_typelen(typelen);
+        size_t length = FRU_FIELDDATALEN(typelen);
         uint8_t* data = malloc(length + 1);
         if (data == NULL)
             fatal("Error allocating custom field");
@@ -554,13 +546,7 @@ int main(int argc, char *argv[])
 
                     bool data_has_chassis = chassis_start_offset != 0;
                     bool data_has_board = board_start_offset != 0;
-                    // has_product = product_start_offset != 0;
-
-                    printf("Offsets: %u %u %u\n",
-                        chassis_start_offset,
-                        board_start_offset,
-                        product_start_offset
-                    );
+                    // bool data_has_product = product_start_offset != 0;
 
                     if (data_has_chassis) {
                         lseek(fd, chassis_start_offset, SEEK_SET);
@@ -585,7 +571,6 @@ int main(int argc, char *argv[])
                         if (board_header[0] != 1)
                             fatal("Unsupported Board Info Area Format Version");
                         // Board Info Area Length = 8 * board_header[1]
-                        // TODO use the lang for text decoding??
                         board.lang = board_header[2];
 
                         uint32_t min_since_epoch = 0;
