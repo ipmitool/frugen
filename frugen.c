@@ -13,7 +13,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <time.h>
-#include <endian.h>
 #include <errno.h>
 #include "fru.h"
 #include "smbios.h"
@@ -94,7 +93,6 @@ bool datestr_to_tv(const char *datestr, struct timeval *tv)
 	tm.tm_isdst = -1; // Use local timezone data in mktime
 	time = mktime(&tm); // Here we have local time since local Epoch
 	tv->tv_sec = time + timezone; // Convert to UTC
-    printf("Time written: %ld\n", tv->tv_sec);
 	tv->tv_usec = 0;
 	return true;
 }
@@ -223,59 +221,52 @@ bool json_fill_fru_area_custom(json_object *jso, fru_reclist_t **custom)
 #endif /* __HAS_JSON__ */
 
 static void safe_read(int fd, void *buffer, size_t length) {
-    ssize_t bytes_read = read(fd, buffer, length);
-    if (bytes_read != length)
-        fatal("Error reading file");
+	ssize_t bytes_read = read(fd, buffer, length);
+	if (bytes_read != length)
+		fatal("Error reading file");
 }
 
 static void fd_read_field(int fd, uint8_t *out) {
-    uint8_t typelen;
-    safe_read(fd, &typelen, 1);
-    // TODO check type, for now we assume it is 0b11
-    //if (!FRU_ISTYPE(typelen, TEXT))
-    //    fatal("Unsupported data type for binary format");
-    size_t length = FRU_FIELDDATALEN(typelen);
-    fru_field_t *field = calloc(1, FRU_FIELDSIZE(typelen));
-    if (field == NULL)
-        fatal("Could not allocate field");
+	uint8_t typelen;
+	safe_read(fd, &typelen, 1);
 
-    field->typelen = typelen;
-    safe_read(fd, &(field->data), length);
+	size_t length = FRU_FIELDDATALEN(typelen);
+	fru_field_t *field = calloc(1, FRU_FIELDSIZE(typelen));
+	if (field == NULL)
+		fatal("Could not allocate field");
+	field->typelen = typelen;
+	safe_read(fd, &(field->data), length);
 
-    char *data = fru_decode_data(field);
-    if (data == NULL)
-        fatal("Could not decode field");
+	char *data = fru_decode_data(field);
+	if (data == NULL)
+		fatal("Could not decode field");
 
-    memcpy(out, data, strlen(data) + 1);
-    free(data);
-    free(field);
+	memcpy(out, data, strlen(data) + 1);
+	free(data);
+	free(field);
 }
 
 static void fd_fill_custom_fields(int fd, fru_reclist_t **reclist) {
-    while (true) {
-        uint8_t typelen;
-        safe_read(fd, &typelen, 1);
-        if (typelen == 0xc1) {
-            // throw away the next byte, it's an empty field
-            // indicating that we've reached the end
-            lseek(fd, 1, SEEK_CUR);
-            break;
-        }
+	while (true) {
+		uint8_t typelen;
+		safe_read(fd, &typelen, 1);
+		if (typelen == 0xc1)
+			break;
 
-        fru_reclist_t *custom_field = add_reclist(reclist);
-        if (custom_field == NULL)
-            fatal("Error allocating custom field");
+		fru_reclist_t *custom_field = add_reclist(reclist);
+		if (custom_field == NULL)
+			fatal("Error allocating custom field");
 
-        size_t length = FRU_FIELDDATALEN(typelen);
-        uint8_t* data = malloc(length + 1);
-        if (data == NULL)
-            fatal("Error allocating custom field");
-        safe_read(fd, data, length);
-        data[length] = 0;
+		size_t length = FRU_FIELDDATALEN(typelen);
+		uint8_t *data = malloc(length + 1);
+		if (data == NULL)
+			fatal("Error allocating custom field");
+		safe_read(fd, data, length);
+		data[length] = 0;
 
-        custom_field->rec = fru_encode_data(LEN_AUTO, data);
-        free(data);
-    }
+		custom_field->rec = fru_encode_data(LEN_AUTO, data);
+		free(data);
+	}
 }
 
 int main(int argc, char *argv[])
@@ -439,16 +430,16 @@ int main(int argc, char *argv[])
 
 			case 'j': // json
 				use_json = true;
-                if (use_binary) {
-                    fatal("Can't specify --json and --binaryformat together");
-                }
+				if (use_binary) {
+					fatal("Can't specify --json and --binaryformat together");
+				}
 				break;
 
 			case 'x': // binary
 				use_binary = true;
-                if (use_json) {
-                    fatal("Can't specify --json and --binaryformat together");
-                }
+				if (use_json) {
+					fatal("Can't specify --json and --binaryformat together");
+				}
 				break;
 
 			case 'z': // from
@@ -533,101 +524,101 @@ int main(int argc, char *argv[])
 					fatal("JSON support was disabled at compile time");
 #endif
 				}
-                else if (use_binary) {
-                    int fd = open(optarg, O_RDONLY);
-                    if (fd < 0) {
-                        perror("");
-                        fatal("Failed to open file");
-                    }
+				else if (use_binary) {
+					int fd = open(optarg, O_RDONLY);
+					if (fd < 0) {
+						perror("");
+						fatal("Failed to open file");
+					}
 
-                    char common_header[8];
-                    ssize_t bytes_read = read(fd, common_header, 8);
-                    if (bytes_read != 8)
-                        fatal("Encountered error while reading header");
+					char common_header[8];
+					ssize_t bytes_read = read(fd, common_header, 8);
+					if (bytes_read != 8)
+						fatal("Encountered error while reading header");
 
-                    // Common Header Format Version = common_header[0]
-                    // Internal Use Area Starting Offset = common_header[1]
-                    uint16_t chassis_start_offset = 8 * common_header[2];
-                    uint16_t board_start_offset = 8 * common_header[3];
-                    uint16_t product_start_offset = 8 * common_header[4];
-                    // MultiRecord Area Starting Offset = 8 * common_header[5]
-                    // Padding = common_header[6] = 0
-                    // Checksum = common_header[7]
+					// Common Header Format Version = common_header[0]
+					// Internal Use Area Starting Offset = common_header[1]
+					uint16_t chassis_start_offset = 8 * common_header[2];
+					uint16_t board_start_offset = 8 * common_header[3];
+					uint16_t product_start_offset = 8 * common_header[4];
+					// MultiRecord Area Starting Offset = 8 * common_header[5]
+					// Padding = common_header[6] = 0
+					// Checksum = common_header[7]
 
-                    // For the above offsets, an offset of 0 is valid and implies
-                    // that the field is not present.
+					// For the above offsets, an offset of 0 is valid and implies
+					// that the field is not present.
 
-                    bool data_has_chassis = chassis_start_offset != 0;
-                    bool data_has_board = board_start_offset != 0;
-                    bool data_has_product = product_start_offset != 0;
+					bool data_has_chassis = chassis_start_offset != 0;
+					bool data_has_board = board_start_offset != 0;
+					bool data_has_product = product_start_offset != 0;
 
-                    if (data_has_chassis) {
-                        lseek(fd, chassis_start_offset, SEEK_SET);
+					if (data_has_chassis) {
+						lseek(fd, chassis_start_offset, SEEK_SET);
 
-                        uint8_t chassis_header[3];
-                        safe_read(fd, chassis_header, 3);
-                        if (chassis_header[0] != 1)
-                            fatal("Unsupported Chassis Info Area Format Version");
-                        // Chassis Info Area Length = 8 * chassis_header[1]
-                        chassis.type = chassis_header[2];
-                        fd_read_field(fd, chassis.pn);
-                        fd_read_field(fd, chassis.serial);
-                        fd_fill_custom_fields(fd, &chassis.cust);
+						uint8_t chassis_header[3];
+						safe_read(fd, chassis_header, 3);
+						if (chassis_header[0] != 1)
+							fatal("Unsupported Chassis Info Area Format Version");
+						// Chassis Info Area Length = 8 * chassis_header[1]
+						chassis.type = chassis_header[2];
+						fd_read_field(fd, chassis.pn);
+						fd_read_field(fd, chassis.serial);
+						fd_fill_custom_fields(fd, &chassis.cust);
 
-                        has_chassis = true;
-                    }
-                    if (data_has_board) {
-                        lseek(fd, board_start_offset, SEEK_SET);
+						has_chassis = true;
+					}
+					if (data_has_board) {
+						lseek(fd, board_start_offset, SEEK_SET);
 
-                        uint8_t board_header[3];
-                        safe_read(fd, board_header, 3);
-                        if (board_header[0] != 1)
-                            fatal("Unsupported Board Info Area Format Version");
-                        // Board Info Area Length = 8 * board_header[1]
-                        board.lang = board_header[2];
+						uint8_t board_header[3];
+						safe_read(fd, board_header, 3);
+						if (board_header[0] != 1)
+							fatal("Unsupported Board Info Area Format Version");
+						// Board Info Area Length = 8 * board_header[1]
+						board.lang = board_header[2];
 
-                        uint32_t min_since_epoch = 0;
-                        safe_read(fd, &min_since_epoch, 3);
-                        struct tm tm_1996 = {
-                            .tm_year = 96,
-                            .tm_mon = 0,
-                            .tm_mday = 1
-                        };
-			            // The argument to mktime is zoneless
-			            board.tv.tv_sec = mktime(&tm_1996) + 60 * min_since_epoch;
+						uint32_t min_since_1996 = 0;
+						safe_read(fd, &min_since_1996, 3);
+						struct tm tm_1996 = {
+							.tm_year = 96,
+							.tm_mon = 0,
+							.tm_mday = 1
+						};
+						// The argument to mktime is zoneless
+						board.tv.tv_sec = mktime(&tm_1996) + 60 * min_since_1996;
 
-                        fd_read_field(fd, board.mfg);
-                        fd_read_field(fd, board.pname);
-                        fd_read_field(fd, board.serial);
-                        fd_read_field(fd, board.pn);
-                        fd_read_field(fd, board.file);
-                        fd_fill_custom_fields(fd, &board.cust);
+						fd_read_field(fd, board.mfg);
+						fd_read_field(fd, board.pname);
+						fd_read_field(fd, board.serial);
+						fd_read_field(fd, board.pn);
+						fd_read_field(fd, board.file);
+						fd_fill_custom_fields(fd, &board.cust);
 
-                        has_board = true;
-                        has_bdate = true;
-                    }
-                    if (data_has_product) {
-                        lseek(fd, product_start_offset, SEEK_SET);
+						has_board = true;
+						has_bdate = true;
+					}
+					if (data_has_product) {
+						lseek(fd, product_start_offset, SEEK_SET);
 
-                        uint8_t product_header[3];
-                        safe_read(fd, product_header, 3);
-                        if (product_header[0] != 1)
-                            fatal("Unsupported Board Info Area Format Version");
-                        // Product Info Area Length = 8 * product_header[1]
-                        product.lang = product_header[2];
+						uint8_t product_header[3];
+						safe_read(fd, product_header, 3);
+						if (product_header[0] != 1)
+							fatal("Unsupported Board Info Area Format Version");
+						// Product Info Area Length = 8 * product_header[1]
+						product.lang = product_header[2];
 
-                        fd_read_field(fd, product.mfg);
-                        fd_read_field(fd, product.pname);
-                        fd_read_field(fd, product.pn);
-                        fd_read_field(fd, product.ver);
-                        fd_read_field(fd, product.serial);
-                        fd_read_field(fd, product.atag);
-                        fd_read_field(fd, product.file);
-                        fd_fill_custom_fields(fd, &product.cust);
+						fd_read_field(fd, product.mfg);
+						fd_read_field(fd, product.pname);
+						fd_read_field(fd, product.pn);
+						fd_read_field(fd, product.ver);
+						fd_read_field(fd, product.serial);
+						fd_read_field(fd, product.atag);
+						fd_read_field(fd, product.file);
+						fd_fill_custom_fields(fd, &product.cust);
 
-                        has_product = true;
-                    }
-                }
+						has_product = true;
+					}
+				}
 				else {
 					fatal("The requested input file format is not supported");
 				}
