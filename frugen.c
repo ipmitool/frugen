@@ -232,9 +232,23 @@ static void fd_read_field(int fd, uint8_t *out) {
     uint8_t typelen;
     safe_read(fd, &typelen, 1);
     // TODO check type, for now we assume it is 0b11
-    if (!FRU_ISTYPE(typelen, TEXT))
-        fatal("Unsupported data type for binary format");
-    safe_read(fd, out, FRU_FIELDDATALEN(typelen));
+    //if (!FRU_ISTYPE(typelen, TEXT))
+    //    fatal("Unsupported data type for binary format");
+    size_t length = FRU_FIELDDATALEN(typelen);
+    fru_field_t *field = calloc(1, FRU_FIELDSIZE(typelen));
+    if (field == NULL)
+        fatal("Could not allocate field");
+
+    field->typelen = typelen;
+    safe_read(fd, &(field->data), length);
+
+    char *data = fru_decode_data(field);
+    if (data == NULL)
+        fatal("Could not decode field");
+
+    memcpy(out, data, strlen(data) + 1);
+    free(data);
+    free(field);
 }
 
 static void fd_fill_custom_fields(int fd, fru_reclist_t **reclist) {
@@ -257,7 +271,6 @@ static void fd_fill_custom_fields(int fd, fru_reclist_t **reclist) {
         if (data == NULL)
             fatal("Error allocating custom field");
         safe_read(fd, data, length);
-        // NUL terminate the date just in case its a string
         data[length] = 0;
 
         custom_field->rec = fru_encode_data(LEN_AUTO, data);
@@ -546,7 +559,7 @@ int main(int argc, char *argv[])
 
                     bool data_has_chassis = chassis_start_offset != 0;
                     bool data_has_board = board_start_offset != 0;
-                    // bool data_has_product = product_start_offset != 0;
+                    bool data_has_product = product_start_offset != 0;
 
                     if (data_has_chassis) {
                         lseek(fd, chassis_start_offset, SEEK_SET);
@@ -592,6 +605,27 @@ int main(int argc, char *argv[])
 
                         has_board = true;
                         has_bdate = true;
+                    }
+                    if (data_has_product) {
+                        lseek(fd, product_start_offset, SEEK_SET);
+
+                        uint8_t product_header[3];
+                        safe_read(fd, product_header, 3);
+                        if (product_header[0] != 1)
+                            fatal("Unsupported Board Info Area Format Version");
+                        // Product Info Area Length = 8 * product_header[1]
+                        product.lang = product_header[2];
+
+                        fd_read_field(fd, product.mfg);
+                        fd_read_field(fd, product.pname);
+                        fd_read_field(fd, product.pn);
+                        fd_read_field(fd, product.ver);
+                        fd_read_field(fd, product.serial);
+                        fd_read_field(fd, product.atag);
+                        fd_read_field(fd, product.file);
+                        fd_fill_custom_fields(fd, &product.cust);
+
+                        has_product = true;
                     }
                 }
 				else {

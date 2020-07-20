@@ -285,7 +285,6 @@ fru_field_t * fru_encode_data(int len, const uint8_t *data)
  * For binary data use FRU_FIELDDATALEN(field->typelen) to find
  * out the size of the returned buffer.
  */
-static
 unsigned char * fru_decode_data(const fru_field_t *field)
 {
 	unsigned char * out;
