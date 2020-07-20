@@ -220,6 +220,57 @@ bool json_fill_fru_area_custom(json_object *jso, fru_reclist_t **custom)
 }
 #endif /* __HAS_JSON__ */
 
+static void safe_read(int fd, void *buffer, size_t length) {
+    ssize_t bytes_read = read(fd, buffer, length);
+    if (bytes_read != length)
+        fatal("Error reading file");
+}
+
+static inline uint8_t get_type_from_typelen(uint8_t typelen) {
+    return (typelen & 0xc0) >> 6;
+}
+
+static inline uint8_t get_length_from_typelen(uint8_t typelen) {
+    return typelen & ~0xc0;
+}
+
+static void fd_read_field(int fd, uint8_t *out) {
+    uint8_t typelen;
+    safe_read(fd, &typelen, 1);
+    // TODO check type, for now we assume it is 0b11
+    if (get_type_from_typelen(typelen) != 3)
+        fatal("Unsupported data type for binary format");
+    safe_read(fd, out, get_length_from_typelen(typelen));
+}
+
+static void fd_fill_custom_fields(int fd, fru_reclist_t **reclist) {
+    while (true) {
+        uint8_t typelen;
+        safe_read(fd, &typelen, 1);
+        if (typelen == 0xc1) {
+            // throw away the next byte, it's an empty field
+            // indicating that we've reached the end
+            lseek(fd, 1, SEEK_CUR);
+            break;
+        }
+
+        fru_reclist_t *custom_field = add_reclist(reclist);
+        if (custom_field == NULL)
+            fatal("Error allocating custom field");
+
+        size_t length = get_length_from_typelen(typelen);
+        uint8_t* data = malloc(length + 1);
+        if (data == NULL)
+            fatal("Error allocating custom field");
+        safe_read(fd, data, length);
+        // NUL terminate the date just in case its a string
+        data[length] = 0;
+
+        custom_field->rec = fru_encode_data(LEN_AUTO, data);
+        free(data);
+    }
+}
+
 int main(int argc, char *argv[])
 {
 	int i;
@@ -500,7 +551,7 @@ int main(int argc, char *argv[])
                     // that the field is not present.
 
                     has_chassis = chassis_start_offset != 0;
-                    // has_board = board_start_offset != 0;
+                    has_board = board_start_offset != 0;
                     // has_product = product_start_offset != 0;
 
                     printf("Offsets: %u %u %u\n",
@@ -510,83 +561,17 @@ int main(int argc, char *argv[])
                     );
 
                     if (has_chassis) {
-                        uint8_t chassis_header[4];
                         lseek(fd, chassis_start_offset, SEEK_SET);
-                        bytes_read = read(fd, chassis_header, 4);
-                        if (bytes_read != 4)
-                            fatal("Error reading chassis");
 
+                        uint8_t chassis_header[3];
+                        safe_read(fd, chassis_header, 3);
                         if (chassis_header[0] != 1)
                             fatal("Unsupported Chassis Info Area Format Version");
-
-                        uint16_t length = 8 * chassis_header[1];
+                        // Chassis Info Area Length = 8 * chassis_header[1]
                         chassis.type = chassis_header[2];
-
-                        {
-                            uint8_t type_and_length = chassis_header[3];
-                            uint8_t type = (type_and_length & 0xc0) >> 6;
-                            uint8_t length = type_and_length & ~0xc0;
-                            // TODO check type, for now we assume it is 0b11
-                            if (type != 3)
-                                fatal("Unsupported data type in chassis");
-
-                            bytes_read = read(fd, chassis.pn, length);
-                            if (bytes_read != length)
-                                fatal("Error reading chassis");
-                        }
-
-                        {
-                            uint8_t type_and_length;
-                            bytes_read = read(fd, &type_and_length, 1);
-                            if (bytes_read != 1)
-                                fatal("Error reading chassis");
-
-                            uint8_t type = (type_and_length & 0xc0) >> 6;
-                            uint8_t length = type_and_length & ~0xc0;
-                            // TODO check type, for now we assume it is 0b11
-                            if (type != 3)
-                                fatal("Unsupported data type in chassis");
-
-                            bytes_read = read(fd, chassis.serial, length);
-                            if (bytes_read != length)
-                                fatal("Error reading chassis");
-                        }
-
-                        while (true) {
-                            uint8_t type_and_length;
-                            bytes_read = read(fd, &type_and_length, 1);
-                            if (bytes_read != 1)
-                                fatal("Error reading chassis");
-
-                            if (type_and_length == 0xc1) {
-                                // throw away the next byte, it's an empty field
-                                // indicating that we've reached the end
-                                lseek(fd, 1, SEEK_CUR);
-                                break;
-                            }
-
-                            fru_reclist_t *custom_field =
-                                add_reclist(&chassis.cust);
-                            if (custom_field == NULL)
-                                fatal("Error allocating custom field");
-
-
-                            uint8_t length = type_and_length & ~0xc0;
-
-                           uint8_t* data = malloc(length + 1);
-                           if (data == NULL)
-                               fatal("Error allocating custom field");
-
-                            bytes_read = read(fd, data, length);
-                            if (bytes_read != length)
-                                fatal("Error reading chassis");
-                            // Add NUL byte
-                            data[length] = 0;
-
-                            // TODO check type for binary data
-                            custom_field->rec = fru_encode_data(LEN_AUTO, data);
-                            free(data);
-                        }
+                        fd_read_field(fd, chassis.pn);
+                        fd_read_field(fd, chassis.serial);
+                        fd_fill_custom_fields(fd, &chassis.cust);
                     }
                 }
 				else {
