@@ -496,7 +496,7 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
 	// Now fill the output buffer. First copy the header.
 	memcpy(outp, &header, headerlen);
 	outp += headerlen;
-	
+
 	DEBUG("area size is %d (%d) bytes\n", totalsize, FRU_BYTES(header.blocks));
 	DEBUG("area size in header is (%d) bytes\n", FRU_BYTES(((fru_info_area_t *)out)->blocks));
 
@@ -669,7 +669,7 @@ fru_board_area_t * fru_encode_board_info(const fru_exploded_board_t *board) ///<
 }
 
 bool fru_decode_board_info(
-    const fru_board_area_t *area, //< [in] encoded chassis
+    const fru_board_area_t *area, //< [in] encoded board
     fru_exploded_board_t *board_out //< [out]
 )
 {
@@ -771,6 +771,64 @@ fru_product_area_t * fru_encode_product_info(const fru_exploded_product_t *produ
 
 	return out;
 }
+
+bool fru_decode_product_info(
+    const fru_product_area_t *area, //< [in] encoded product
+    fru_exploded_product_t *product_out //< [out]
+)
+{
+	fru_field_t *field;
+	const uint8_t *data = area->data;
+
+	product_out->lang = area->langtype;
+
+	field = (fru_field_t*)data;
+	if (!fru_decode_data(field, product_out->mfg,
+                         sizeof(product_out->mfg)))
+		return false;
+	data += FRU_FIELDSIZE(field->typelen);
+
+	field = (fru_field_t*)data;
+	if (!fru_decode_data(field, product_out->pname,
+                         sizeof(product_out->pname)))
+		return false;
+	data += FRU_FIELDSIZE(field->typelen);
+
+	field = (fru_field_t*)data;
+	if (!fru_decode_data(field, product_out->pn,
+                         sizeof(product_out->pn)))
+		return false;
+	data += FRU_FIELDSIZE(field->typelen);
+
+	field = (fru_field_t*)data;
+	if (!fru_decode_data(field, product_out->ver,
+                         sizeof(product_out->ver)))
+		return false;
+	data += FRU_FIELDSIZE(field->typelen);
+
+	field = (fru_field_t*)data;
+	if (!fru_decode_data(field, product_out->serial,
+                         sizeof(product_out->serial)))
+		return false;
+	data += FRU_FIELDSIZE(field->typelen);
+
+	field = (fru_field_t*)data;
+	if (!fru_decode_data(field, product_out->atag,
+                         sizeof(product_out->atag)))
+		return false;
+	data += FRU_FIELDSIZE(field->typelen);
+
+	field = (fru_field_t*)data;
+	if (!fru_decode_data(field, product_out->file,
+                         sizeof(product_out->file)))
+		return false;
+	data += FRU_FIELDSIZE(field->typelen);
+
+	fru_decode_custom_fields(data, &product_out->cust);
+
+	return true;
+}
+
 /**
  * Create a FRU information file.
  *
