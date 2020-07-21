@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <unistd.h>
 #include "fru.h"
 #include "fru_reader.h"
 #include "fatal.h"
@@ -57,6 +58,20 @@ void fd_fill_custom_fields(int fd, fru_reclist_t **reclist) {
 fru_chassis_area_t *read_fru_chassis_area(int fd) {
     size_t base_len = sizeof(fru_chassis_area_t);
     fru_chassis_area_t *area = malloc(base_len);
+    safe_read(fd, area, base_len);
+    size_t data_len = 8 * area->blocks;
+    area = realloc(area, base_len + data_len);
+    safe_read(fd, &area->data, data_len);
+
+    return area;
+}
+
+/**
+ * Allocate and read a fru_board_area_t from a file descriptor
+ */
+fru_board_area_t *read_fru_board_area(int fd) {
+    size_t base_len = sizeof(fru_board_area_t);
+    fru_board_area_t *area = malloc(base_len);
     safe_read(fd, area, base_len);
     size_t data_len = 8 * area->blocks;
     area = realloc(area, base_len + data_len);

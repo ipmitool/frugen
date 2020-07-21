@@ -674,6 +674,67 @@ fru_board_area_t * fru_encode_board_info(const fru_exploded_board_t *board) ///<
 	return out;
 }
 
+bool fru_decode_board_info(
+    const fru_board_area_t *area, //< [in] encoded chassis
+    fru_exploded_board_t *board_out //< [out]
+)
+{
+    uint8_t typelen;
+
+	const uint8_t *curr_data = area->data;
+
+    board_out->lang = area->langtype;
+
+    uint32_t *min_since_1996 = (uint32_t*)&(area->mfgdate);
+    struct tm tm_1996 = {
+        .tm_year = 96,
+        .tm_mon = 0,
+        .tm_mday = 1
+    };
+    // The argument to mktime is zoneless
+    board_out->tv.tv_sec = mktime(&tm_1996) + 60 * (*min_since_1996);
+
+    typelen = curr_data[0];
+    curr_data++;
+    if (!fru_decode_data(typelen, curr_data, board_out->mfg,
+                         sizeof(board_out->mfg)))
+        return false;
+    curr_data += FRU_FIELDDATALEN(typelen);
+
+    typelen = curr_data[0];
+    curr_data++;
+    if (!fru_decode_data(typelen, curr_data, board_out->pname,
+                         sizeof(board_out->pname)))
+        return false;
+    curr_data += FRU_FIELDDATALEN(typelen);
+
+    typelen = curr_data[0];
+    curr_data++;
+    if (!fru_decode_data(typelen, curr_data, board_out->serial,
+                         sizeof(board_out->serial)))
+        return false;
+    curr_data += FRU_FIELDDATALEN(typelen);
+
+    typelen = curr_data[0];
+    curr_data++;
+    if (!fru_decode_data(typelen, curr_data, board_out->pn,
+                         sizeof(board_out->pn)))
+        return false;
+    curr_data += FRU_FIELDDATALEN(typelen);
+
+    typelen = curr_data[0];
+    curr_data++;
+    if (!fru_decode_data(typelen, curr_data, board_out->file,
+                         sizeof(board_out->file)))
+        return false;
+    curr_data += FRU_FIELDDATALEN(typelen);
+
+
+    fru_decode_custom_fields(curr_data, &board_out->cust);
+
+    return true;
+}
+
 /**
  * Allocate and build a Product Information Area block.
  *
