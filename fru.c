@@ -675,7 +675,7 @@ fru_board_area_t * fru_encode_board_info(const fru_exploded_board_t *board) ///<
 }
 
 bool fru_decode_board_info(
-    const fru_board_area_t *area, //< [in] encoded chassis
+    const fru_board_area_t *area, //< [in] encoded board
     fru_exploded_board_t *board_out //< [out]
 )
 {
@@ -784,6 +784,74 @@ fru_product_area_t * fru_encode_product_info(const fru_exploded_product_t *produ
 
 	return out;
 }
+
+bool fru_decode_product_info(
+    const fru_product_area_t *area, //< [in] encoded product
+    fru_exploded_product_t *product_out //< [out]
+)
+{
+    uint8_t typelen;
+
+	const uint8_t *curr_data = area->data;
+
+    product_out->lang = area->langtype;
+
+    typelen = curr_data[0];
+    curr_data++;
+    if (!fru_decode_data(typelen, curr_data, product_out->mfg,
+                         sizeof(product_out->mfg)))
+        return false;
+    curr_data += FRU_FIELDDATALEN(typelen);
+
+    typelen = curr_data[0];
+    curr_data++;
+    if (!fru_decode_data(typelen, curr_data, product_out->pname,
+                         sizeof(product_out->pname)))
+        return false;
+    curr_data += FRU_FIELDDATALEN(typelen);
+
+    typelen = curr_data[0];
+    curr_data++;
+    if (!fru_decode_data(typelen, curr_data, product_out->pn,
+                         sizeof(product_out->pn)))
+        return false;
+    curr_data += FRU_FIELDDATALEN(typelen);
+
+    typelen = curr_data[0];
+    curr_data++;
+    if (!fru_decode_data(typelen, curr_data, product_out->ver,
+                         sizeof(product_out->ver)))
+        return false;
+    curr_data += FRU_FIELDDATALEN(typelen);
+
+
+    typelen = curr_data[0];
+    curr_data++;
+    if (!fru_decode_data(typelen, curr_data, product_out->serial,
+                         sizeof(product_out->serial)))
+        return false;
+    curr_data += FRU_FIELDDATALEN(typelen);
+
+    typelen = curr_data[0];
+    curr_data++;
+    if (!fru_decode_data(typelen, curr_data, product_out->atag,
+                         sizeof(product_out->atag)))
+        return false;
+    curr_data += FRU_FIELDDATALEN(typelen);
+
+    typelen = curr_data[0];
+    curr_data++;
+    if (!fru_decode_data(typelen, curr_data, product_out->file,
+                         sizeof(product_out->file)))
+        return false;
+    curr_data += FRU_FIELDDATALEN(typelen);
+
+
+    fru_decode_custom_fields(curr_data, &product_out->cust);
+
+    return true;
+}
+
 /**
  * Create a FRU information file.
  *

@@ -232,6 +232,7 @@ bool fru_decode_chassis_info(const fru_chassis_area_t *area, fru_exploded_chassi
 fru_board_area_t * fru_encode_board_info(const fru_exploded_board_t *board);
 bool fru_decode_board_info(const fru_board_area_t *area, fru_exploded_board_t *board_out);
 fru_product_area_t * fru_encode_product_info(const fru_exploded_product_t *product);
+bool fru_decode_product_info(const fru_product_area_t *area, fru_exploded_product_t *product_out);
 fru_field_t * fru_encode_data(int len, const uint8_t *data);
 bool fru_decode_data(uint8_t typelen, const uint8_t *data, uint8_t *out, size_t out_len);
 fru_t * fru_create(fru_area_t area[FRU_MAX_AREAS], size_t *size);

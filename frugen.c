@@ -519,21 +519,10 @@ int main(int argc, char *argv[])
 					if (data_has_product) {
 						lseek(fd, product_start_offset, SEEK_SET);
 
-						uint8_t product_header[3];
-						safe_read(fd, product_header, 3);
-						if (product_header[0] != 1)
-							fatal("Unsupported Board Info Area Format Version");
-						// Product Info Area Length = 8 * product_header[1]
-						product.lang = product_header[2];
-
-						fd_read_field(fd, product.mfg);
-						fd_read_field(fd, product.pname);
-						fd_read_field(fd, product.pn);
-						fd_read_field(fd, product.ver);
-						fd_read_field(fd, product.serial);
-						fd_read_field(fd, product.atag);
-						fd_read_field(fd, product.file);
-						fd_fill_custom_fields(fd, &product.cust);
+						fru_product_area_t *product_raw =
+							read_fru_product_area(fd);
+						bool success =
+							fru_decode_product_info(product_raw, &product);
 
 						has_product = true;
 					}
