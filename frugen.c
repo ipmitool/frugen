@@ -533,8 +533,7 @@ int main(int argc, char *argv[])
 				else if (use_binary) {
 					int fd = open(optarg, O_RDONLY);
 					if (fd < 0) {
-						perror("");
-						fatal("Failed to open file");
+						fatal("Failed to open file: %s", strerror(errno));
 					}
 
 					char common_header[8];
