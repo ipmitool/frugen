@@ -476,57 +476,53 @@ int main(int argc, char *argv[])
 						fatal("Failed to open file: %s", strerror(errno));
 					}
 
-					char common_header[8];
-					safe_read(fd, common_header, 8);
+					fru_t *raw_fru = read_fru_header(fd);
+					if (!raw_fru)
+						fatal("Failed to read fru header");
 
-					// Common Header Format Version = common_header[0]
-					// Internal Use Area Starting Offset = common_header[1]
-					uint16_t chassis_start_offset = 8 * common_header[2];
-					uint16_t board_start_offset = 8 * common_header[3];
-					uint16_t product_start_offset = 8 * common_header[4];
-					// MultiRecord Area Starting Offset = 8 * common_header[5]
-					// Padding = common_header[6] = 0
-					// Checksum = common_header[7]
+					if (raw_fru->chassis != 0) {
+						if (lseek(fd, 8 * raw_fru->chassis, SEEK_SET) < 0)
+							fatal("Failed to seek");
 
-					// For the above offsets, an offset of 0 is valid and implies
-					// that the field is not present.
+						fru_chassis_area_t *chassis_raw =
+							read_fru_chassis_area(fd);
+						bool success = fru_decode_chassis_info(
+							chassis_raw, &chassis);
+						if (!success)
+							fatal("Failed to decode chassis");
 
-					bool data_has_chassis = chassis_start_offset != 0;
-					bool data_has_board = board_start_offset != 0;
-					bool data_has_product = product_start_offset != 0;
-
-					if (data_has_chassis) {
-                        lseek(fd, chassis_start_offset, SEEK_SET);
-                        fru_chassis_area_t *chassis_raw =
-                            read_fru_chassis_area(fd);
-                        bool success = fru_decode_chassis_info(
-                            chassis_raw, &chassis);
-                        if (!success)
-                            fatal("Failed to decode chassis!");
-                        free(chassis_raw);
-
+						free(chassis_raw);
 						has_chassis = true;
 					}
-					if (data_has_board) {
-						lseek(fd, board_start_offset, SEEK_SET);
+					if (raw_fru->board != 0) {
+						if(lseek(fd, 8 * raw_fru->board, SEEK_SET) < 0)
+							fatal("Failed to seek");
 
 						fru_board_area_t *board_raw = read_fru_board_area(fd);
 						bool success = fru_decode_board_info(board_raw, &board);
+						if (!success)
+							fatal("Failed to decode board");
 
+						free(board_raw);
 						has_board = true;
 						has_bdate = true;
 					}
-					if (data_has_product) {
-						lseek(fd, product_start_offset, SEEK_SET);
+					if (raw_fru->product != 0) {
+						if (lseek(fd, 8 * raw_fru->product, SEEK_SET) < 0)
+							fatal("Failed to seek");
 
 						fru_product_area_t *product_raw =
 							read_fru_product_area(fd);
 						bool success =
 							fru_decode_product_info(product_raw, &product);
+						if (!success)
+							fatal("Failed to decode product");
 
+						free(product_raw);
 						has_product = true;
 					}
 
+					free(raw_fru);
 					close(fd);
 				}
 				else {
