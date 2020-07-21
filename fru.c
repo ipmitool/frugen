@@ -528,7 +528,7 @@ static bool fru_decode_custom_fields(const uint8_t *data, fru_reclist_t **reclis
 	fru_field_t *field = NULL;
 
 	while (true) {
-		field = data;
+		field = (fru_field_t*)data;
 		if (field->typelen == 0xc1)
 			break;
 
@@ -612,7 +612,7 @@ bool fru_decode_chassis_info(
 		return false;
 
 	data += FRU_FIELDSIZE(field->typelen);
-	field = data;
+	field = (fru_field_t*)data;
 	if (!fru_decode_data(field, chassis_out->serial,
                          sizeof(chassis_out->serial)))
 		return false;
@@ -666,6 +666,60 @@ fru_board_area_t * fru_encode_board_info(const fru_exploded_board_t *board) ///<
 	                                               ARRAY_SZ(strings), strings);
 
 	return out;
+}
+
+bool fru_decode_board_info(
+    const fru_board_area_t *area, //< [in] encoded chassis
+    fru_exploded_board_t *board_out //< [out]
+)
+{
+    fru_field_t *field;
+	const uint8_t *data = area->data;
+
+    board_out->lang = area->langtype;
+
+    uint32_t *min_since_1996 = (uint32_t*)&(area->mfgdate);
+    struct tm tm_1996 = {
+        .tm_year = 96,
+        .tm_mon = 0,
+        .tm_mday = 1
+    };
+    // The argument to mktime is zoneless
+    board_out->tv.tv_sec = mktime(&tm_1996) + 60 * (*min_since_1996);
+
+	field = (fru_field_t*)data;
+    if (!fru_decode_data(field, board_out->mfg,
+                         sizeof(board_out->mfg)))
+        return false;
+	data += FRU_FIELDSIZE(field->typelen);
+
+	field = (fru_field_t*)data;
+    if (!fru_decode_data(field, board_out->pname,
+                         sizeof(board_out->pname)))
+        return false;
+	data += FRU_FIELDSIZE(field->typelen);
+
+	field = (fru_field_t*)data;
+    if (!fru_decode_data(field, board_out->serial,
+                         sizeof(board_out->serial)))
+        return false;
+	data += FRU_FIELDSIZE(field->typelen);
+
+	field = (fru_field_t*)data;
+    if (!fru_decode_data(field, board_out->pn,
+                         sizeof(board_out->pn)))
+        return false;
+	data += FRU_FIELDSIZE(field->typelen);
+
+	field = (fru_field_t*)data;
+    if (!fru_decode_data(field, board_out->file,
+                         sizeof(board_out->file)))
+        return false;
+	data += FRU_FIELDSIZE(field->typelen);
+
+    fru_decode_custom_fields(data, &board_out->cust);
+
+    return true;
 }
 
 /**

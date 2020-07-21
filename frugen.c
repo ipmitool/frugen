@@ -513,29 +513,8 @@ int main(int argc, char *argv[])
 					if (data_has_board) {
 						lseek(fd, board_start_offset, SEEK_SET);
 
-						uint8_t board_header[3];
-						safe_read(fd, board_header, 3);
-						if (board_header[0] != 1)
-							fatal("Unsupported Board Info Area Format Version");
-						// Board Info Area Length = 8 * board_header[1]
-						board.lang = board_header[2];
-
-						uint32_t min_since_1996 = 0;
-						safe_read(fd, &min_since_1996, 3);
-						struct tm tm_1996 = {
-							.tm_year = 96,
-							.tm_mon = 0,
-							.tm_mday = 1
-						};
-						// The argument to mktime is zoneless
-						board.tv.tv_sec = mktime(&tm_1996) + 60 * min_since_1996;
-
-						fd_read_field(fd, board.mfg);
-						fd_read_field(fd, board.pname);
-						fd_read_field(fd, board.serial);
-						fd_read_field(fd, board.pn);
-						fd_read_field(fd, board.file);
-						fd_fill_custom_fields(fd, &board.cust);
+						fru_board_area_t *board_raw = read_fru_board_area(fd);
+						bool success = fru_decode_board_info(board_raw, &board);
 
 						has_board = true;
 						has_bdate = true;

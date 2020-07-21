@@ -153,7 +153,7 @@ typedef fru_info_area_t fru_chassis_area_t;
 
 typedef struct fru_board_area_s {
 	FRU_INFO_AREA_HEADER;
-	uint8_t mfgdate[3]; ///< Manufacturing date/time in seconds since 1996/1/1 0:00
+	uint8_t mfgdate[3]; ///< Manufacturing date/time in minutes since 1996/1/1 0:00
 	uint8_t data[];     ///< Variable size (multiple of 8 bytes) data with tail padding and checksum
 } fru_board_area_t;
 
@@ -230,6 +230,7 @@ typedef struct {
 fru_chassis_area_t * fru_encode_chassis_info(const fru_exploded_chassis_t *chassis);
 bool fru_decode_chassis_info(const fru_chassis_area_t *area, fru_exploded_chassis_t *chassis_out);
 fru_board_area_t * fru_encode_board_info(const fru_exploded_board_t *board);
+bool fru_decode_board_info(const fru_board_area_t *area, fru_exploded_board_t *board_out);
 fru_product_area_t * fru_encode_product_info(const fru_exploded_product_t *product);
 fru_field_t * fru_encode_data(int len, const uint8_t *data);
 bool fru_decode_data(fru_field_t *field, uint8_t *out, size_t out_len);
