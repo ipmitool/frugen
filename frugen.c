@@ -319,8 +319,8 @@ int main(int argc, char *argv[])
 		/* Set input file format to JSON */
 		{ .name = "json",          .val = 'j', .has_arg = false },
 
-		/* Set input file format to binary */
-		{ .name = "binaryformat",          .val = 'x', .has_arg = false },
+		/* Set input file format to raw binary */
+		{ .name = "raw",          .val = 'r', .has_arg = false },
 
 		/* Set file to load the data from */
 		{ .name = "from",          .val = 'z', .has_arg = true },
@@ -360,7 +360,7 @@ int main(int argc, char *argv[])
 			    "\n\t\t"
 			    "There must be an even number of characters in a 'binary' argument",
 		['j'] = "Set input text file format to JSON (default). Specify before '--from'",
-		['x'] = "Set input file format to binary. Specify before '--from'",
+		['r'] = "Set input file format to raw binary. Specify before '--from'",
 		['z'] = "Load FRU information from a text file",
 		/* Chassis info area related options */
 		['t'] = "Set chassis type (hex). Defaults to 0x02 ('Unknown')",
@@ -437,14 +437,14 @@ int main(int argc, char *argv[])
 			case 'j': // json
 				use_json = true;
 				if (use_binary) {
-					fatal("Can't specify --json and --binaryformat together");
+					fatal("Can't specify --json and --raw together");
 				}
 				break;
 
-			case 'x': // binary
+			case 'r': // binary
 				use_binary = true;
 				if (use_json) {
-					fatal("Can't specify --json and --binaryformat together");
+					fatal("Can't specify --json and --raw together");
 				}
 				break;
 
