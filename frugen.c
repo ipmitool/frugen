@@ -243,8 +243,10 @@ static void fd_read_field(int fd, uint8_t *out) {
 	field->typelen = typelen;
 	safe_read(fd, &(field->data), length);
 
-	char *data = fru_decode_data(field);
+	char *data = malloc(2 * length + 1);
 	if (data == NULL)
+		fatal("Could not allocate memory");
+	if(!fru_decode_data(field, data, 2 * length + 1))
 		fatal("Could not decode field");
 
 	memcpy(out, data, strnlen(data, 2 *  length) + 1);

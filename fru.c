@@ -170,11 +170,14 @@ static fru_field_t *fru_encode_6bit(const unsigned char *s /**< [in] Input strin
 }
 
 /**
- * Allocate a buffer and decode a 6-bit ASCII string from it
+ * Decode a 6-bit ASCII string
+ *
+ * Return false if there were errors during decoding and true otherwise.
  */
-static unsigned char *fru_decode_6bit(const fru_field_t *field)
+static bool fru_decode_6bit(const fru_field_t *field,
+                            uint8_t *out, //< [out] buffer to decode into
+                            size_t out_len) //< [in] length of output buffer
 {
-	unsigned char *out = NULL;
 	const unsigned char *s6;
 	int len, len6bit;
 	int i, i6;
@@ -185,8 +188,8 @@ static unsigned char *fru_decode_6bit(const fru_field_t *field)
 	s6 = field->data;
 
 	len = FRU_6BIT_FULLLENGTH(len6bit);
-	if (!(out = malloc(len + 1))) {
-		return out;
+	if (out_len < (len + 1)) {
+		return false;
 	}
 	DEBUG("Allocated a destination buffer at %p\n", out);
 	memset(out, 0, len + 1);
@@ -224,7 +227,7 @@ static unsigned char *fru_decode_6bit(const fru_field_t *field)
 	// string that was a byte shorter than a multiple of 4.
 	cut_tail(out);
 
-	return out;
+	return true;
 }
 
 /**
@@ -280,23 +283,26 @@ fru_field_t * fru_encode_data(int len, const uint8_t *data)
 }
 
 /**
- * Allocate a buffer and decode the data from it.
+ * Decode data from a buffer into another buffer.
  *
  * For binary data use FRU_FIELDDATALEN(field->typelen) to find
- * out the size of the returned buffer.
+ * out the size of valid bytes in the returned buffer.
+ *
+ * Return false if there were errors during decoding and true otherwise.
  */
-unsigned char * fru_decode_data(const fru_field_t *field)
+bool fru_decode_data(const fru_field_t *field,
+                     uint8_t *out, //< [out] buffer to decode into
+                     size_t out_len) // <[in] length of output buffer
 {
-	unsigned char * out;
 
 	if (!field) return NULL;
 
 	if (FRU_ISTYPE(field->typelen, ASCII_6BIT)) {
-		out = fru_decode_6bit(field);
+		return fru_decode_6bit(field, out, out_len);
 	}
 	else {
-		out = malloc(FRU_FIELDDATALEN(field->typelen) + 1);
-		if (!out) return NULL;
+        if (out_len < (FRU_FIELDDATALEN(field->typelen) + 1))
+			return false;
 
 		if (FRU_ISTYPE(field->typelen, BCDPLUS)) {
 			int i;
@@ -329,7 +335,7 @@ unsigned char * fru_decode_data(const fru_field_t *field)
 		}
 	}
 
-	return out;
+	return true;
 }
 
 #if 0
@@ -788,7 +794,7 @@ void test_encodings(void)
 
 	for(i = 0; i < ARRAY_SZ(test_strings); i++) {
 		fru_field_t *field;
-		const unsigned char *out;
+		const unsigned char out[FRU_FIELDMAXARRAY];
 
 		printf("Data set %d.\n", i);
 		printf("Original data ");
@@ -824,8 +830,7 @@ void test_encodings(void)
 		dump(FRU_FIELDSIZE(field->typelen), (uint8_t *)field);
 		printf("Decoding... ");
 
-		out = fru_decode_data(field);
-		if (!out) {
+		if (!fru_decode_data(field->typelen, out, FRU_FIELDMAXARRAY)) {
 			printf("FAIL!");
 			goto next;
 		}
@@ -848,7 +853,6 @@ void test_encodings(void)
 			printf("FAIL!");
 		}
 
-		free((void *)out);
 next:
 		free((void *)field);
 		printf("\n\n");

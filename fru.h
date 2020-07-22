@@ -5,6 +5,7 @@
 #ifndef __FRULIB_FRU_H__
 #define __FRULIB_FRU_H__
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -230,7 +231,7 @@ fru_chassis_area_t * fru_encode_chassis_info(const fru_exploded_chassis_t *chass
 fru_board_area_t * fru_encode_board_info(const fru_exploded_board_t *board);
 fru_product_area_t * fru_encode_product_info(const fru_exploded_product_t *product);
 fru_field_t * fru_encode_data(int len, const uint8_t *data);
-unsigned char * fru_decode_data(const fru_field_t *field);
+bool fru_decode_data(const fru_field_t *field, uint8_t *out, size_t out_len);
 fru_t * fru_create(fru_area_t area[FRU_MAX_AREAS], size_t *size);
 
 #endif // __FRULIB_FRU_H__
