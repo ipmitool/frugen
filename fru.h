@@ -226,9 +226,9 @@ typedef struct {
 
 #define fru_loadfield(eafield, value) strncpy(eafield, value, FRU_FIELDMAXLEN)
 
-fru_chassis_area_t * fru_chassis_info(const fru_exploded_chassis_t *chassis);
-fru_board_area_t * fru_board_info(const fru_exploded_board_t *board);
-fru_product_area_t * fru_product_info(const fru_exploded_product_t *product);
+fru_chassis_area_t * fru_encode_chassis_info(const fru_exploded_chassis_t *chassis);
+fru_board_area_t * fru_encode_board_info(const fru_exploded_board_t *board);
+fru_product_area_t * fru_encode_product_info(const fru_exploded_product_t *product);
 fru_field_t * fru_encode_data(int len, const uint8_t *data);
 unsigned char * fru_decode_data(const fru_field_t *field);
 fru_t * fru_create(fru_area_t area[FRU_MAX_AREAS], size_t *size);

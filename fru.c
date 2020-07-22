@@ -537,7 +537,7 @@ err:
  * @returns fru_info_area_t *area A newly allocated buffer containing the created area
  *
  */
-fru_chassis_area_t * fru_chassis_info(const fru_exploded_chassis_t *chassis) ///< [in] Exploded chassis info area
+fru_chassis_area_t * fru_encode_chassis_info(const fru_exploded_chassis_t *chassis) ///< [in] Exploded chassis info area
 {
 	int i;
 
@@ -584,7 +584,7 @@ fru_chassis_area_t * fru_chassis_info(const fru_exploded_chassis_t *chassis) ///
  * @returns fru_info_area_t *area A newly allocated buffer containing the created area
  *
  */
-fru_board_area_t * fru_board_info(const fru_exploded_board_t *board) ///< [in] Exploded board information area
+fru_board_area_t * fru_encode_board_info(const fru_exploded_board_t *board) ///< [in] Exploded board information area
 {
 	int i;
 
@@ -629,7 +629,7 @@ fru_board_area_t * fru_board_info(const fru_exploded_board_t *board) ///< [in] E
  * @returns fru_info_area_t *area A newly allocated buffer containing the created area
  *
  */
-fru_product_area_t * fru_product_info(const fru_exploded_product_t *product) ///< [in] Exploded product information area
+fru_product_area_t * fru_encode_product_info(const fru_exploded_product_t *product) ///< [in] Exploded product information area
 {
 	int i;
 

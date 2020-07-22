@@ -757,7 +757,7 @@ int main(int argc, char *argv[])
 		fru_chassis_area_t *ci = NULL;
 		debug(1, "FRU file will have a chassis information area");
 		debug(3, "Chassis information area's custom field list is %p", chassis.cust);
-		ci = fru_chassis_info(&chassis);
+		ci = fru_encode_chassis_info(&chassis);
 		e = errno;
 		free_reclist(chassis.cust);
 
@@ -781,7 +781,7 @@ int main(int argc, char *argv[])
 			board.tv = (struct timeval){0};
 		}
 
-		bi = fru_board_info(&board);
+		bi = fru_encode_board_info(&board);
 		e = errno;
 		free_reclist(board.cust);
 
@@ -798,7 +798,7 @@ int main(int argc, char *argv[])
 		fru_product_area_t *pi = NULL;
 		debug(1, "FRU file will have a product information area");
 		debug(3, "Product information area's custom field list is %p", product.cust);
-		pi = fru_product_info(&product);
+		pi = fru_encode_product_info(&product);
 
 		e = errno;
 		free_reclist(product.cust);
