@@ -15,17 +15,13 @@
 #include <time.h>
 #include <errno.h>
 #include "fru.h"
+#include "fru_reader.h"
 #include "smbios.h"
+#include "fatal.h"
 
 #ifdef __HAS_JSON__
 #include <json-c/json.h>
 #endif
-
-#define fatal(fmt, args...) do {  \
-	fprintf(stderr, fmt, ##args); \
-	fprintf(stderr, "\n");        \
-	exit(1);                      \
-} while(0)
 
 volatile int debug_level = 0;
 #define debug(level, fmt, args...) do { \
@@ -38,7 +34,6 @@ volatile int debug_level = 0;
 		errno = e;                      \
 	}                                   \
 } while(0)
-
 
 /**
  * Convert 2 bytes of hex string into a binary byte
@@ -219,63 +214,6 @@ bool json_fill_fru_area_custom(json_object *jso, fru_reclist_t **custom)
 	return data_in_this_area;
 }
 #endif /* __HAS_JSON__ */
-
-static void safe_read(int fd, void *buffer, size_t length) {
-    size_t total_bytes_read = 0;
-    while (total_bytes_read != length) {
-        ssize_t bytes_read = read(
-			fd, buffer + total_bytes_read, length - total_bytes_read);
-        if (bytes_read == -1)
-            fatal("Error reading file");
-
-        total_bytes_read += bytes_read;
-    }
-}
-
-static void fd_read_field(int fd, uint8_t *out) {
-	uint8_t typelen;
-	safe_read(fd, &typelen, 1);
-
-	size_t length = FRU_FIELDDATALEN(typelen);
-	fru_field_t *field = calloc(1, FRU_FIELDSIZE(typelen));
-	if (field == NULL)
-		fatal("Could not allocate field");
-	field->typelen = typelen;
-	safe_read(fd, &(field->data), length);
-
-	char *data = malloc(2 * length + 1);
-	if (data == NULL)
-		fatal("Could not allocate memory");
-	if(!fru_decode_data(field, data, 2 * length + 1))
-		fatal("Could not decode field");
-
-	memcpy(out, data, strnlen(data, 2 *  length) + 1);
-	free(data);
-	free(field);
-}
-
-static void fd_fill_custom_fields(int fd, fru_reclist_t **reclist) {
-	while (true) {
-		uint8_t typelen;
-		safe_read(fd, &typelen, 1);
-		if (typelen == 0xc1)
-			break;
-
-		fru_reclist_t *custom_field = add_reclist(reclist);
-		if (custom_field == NULL)
-			fatal("Error allocating custom field");
-
-		size_t length = FRU_FIELDDATALEN(typelen);
-		uint8_t *data = malloc(length + 1);
-		if (data == NULL)
-			fatal("Error allocating custom field");
-		safe_read(fd, data, length);
-		data[length] = 0;
-
-		custom_field->rec = fru_encode_data(LEN_AUTO, data);
-		free(data);
-	}
-}
 
 int main(int argc, char *argv[])
 {
@@ -558,17 +496,17 @@ int main(int argc, char *argv[])
 					bool data_has_product = product_start_offset != 0;
 
 					if (data_has_chassis) {
-						lseek(fd, chassis_start_offset, SEEK_SET);
+                        lseek(fd, chassis_start_offset, SEEK_SET);
+                        fru_chassis_area_t *chassis_raw =
+                            read_fru_chassis_area(fd);
+                        bool success = fru_decode_chassis_info(
+                            chassis_raw, &chassis);
+                        if (!success)
+                            fatal("Failed to decode chassis!");
+                        free(chassis_raw);
 
-						uint8_t chassis_header[3];
-						safe_read(fd, chassis_header, 3);
-						if (chassis_header[0] != 1)
-							fatal("Unsupported Chassis Info Area Format Version");
-						// Chassis Info Area Length = 8 * chassis_header[1]
-						chassis.type = chassis_header[2];
-						fd_read_field(fd, chassis.pn);
-						fd_read_field(fd, chassis.serial);
-						fd_fill_custom_fields(fd, &chassis.cust);
+						printf("Loaded chassis serial '%s'\n", chassis.serial);
+						printf("Loaded chassis pn '%s'\n", chassis.pn);
 
 						has_chassis = true;
 					}
