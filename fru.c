@@ -174,7 +174,8 @@ static fru_field_t *fru_encode_6bit(const unsigned char *s /**< [in] Input strin
  *
  * Return false if there were errors during decoding and true otherwise.
  */
-static bool fru_decode_6bit(const fru_field_t *field,
+static bool fru_decode_6bit(uint8_t typelen, //<[in] typelen of encoded buffer
+                            const uint8_t *data, //< [in] buffer containing encoded 6bit ascii
                             uint8_t *out, //< [out] buffer to decode into
                             size_t out_len) //< [in] length of output buffer
 {
@@ -182,10 +183,10 @@ static bool fru_decode_6bit(const fru_field_t *field,
 	int len, len6bit;
 	int i, i6;
 
-	if (!field) return out;
+	if (!data) return false;
 
-	len6bit = FRU_FIELDDATALEN(field->typelen);
-	s6 = field->data;
+	len6bit = FRU_FIELDDATALEN(typelen);
+	s6 = data;
 
 	len = FRU_6BIT_FULLLENGTH(len6bit);
 	if (out_len < (len + 1)) {
@@ -285,31 +286,31 @@ fru_field_t * fru_encode_data(int len, const uint8_t *data)
 /**
  * Decode data from a buffer into another buffer.
  *
- * For binary data use FRU_FIELDDATALEN(field->typelen) to find
+ * For binary data use FRU_FIELDDATALEN(typelen) to find
  * out the size of valid bytes in the returned buffer.
  *
  * Return false if there were errors during decoding and true otherwise.
  */
-bool fru_decode_data(const fru_field_t *field,
+bool fru_decode_data(uint8_t typelen, //< [in] typelen for the raw data
+                     const uint8_t *data, //<[in] buffer containing raw data
                      uint8_t *out, //< [out] buffer to decode into
                      size_t out_len) // <[in] length of output buffer
 {
+	if (!data) return false;
 
-	if (!field) return NULL;
-
-	if (FRU_ISTYPE(field->typelen, ASCII_6BIT)) {
-		return fru_decode_6bit(field, out, out_len);
+	if (FRU_ISTYPE(typelen, ASCII_6BIT)) {
+		return fru_decode_6bit(typelen, data, out, out_len);
 	}
 	else {
-        if (out_len < (FRU_FIELDDATALEN(field->typelen) + 1))
+        if (out_len < (FRU_FIELDDATALEN(typelen) + 1))
 			return false;
 
-		if (FRU_ISTYPE(field->typelen, BCDPLUS)) {
+		if (FRU_ISTYPE(typelen, BCDPLUS)) {
 			int i;
 			uint8_t c;
 			/* Copy the data and pack it as BCD */
-			for (i = 0; i < 2 * FRU_FIELDDATALEN(field->typelen); i++) {
-				c = (field->data[i / 2] >> ((i % 2) ? 0 : 4)) & 0x0F;
+			for (i = 0; i < 2 * FRU_FIELDDATALEN(typelen); i++) {
+				c = (data[i / 2] >> ((i % 2) ? 0 : 4)) & 0x0F;
 				switch(c) {
 					case 0xA:
 						out[i] = ' ';
@@ -324,14 +325,14 @@ bool fru_decode_data(const fru_field_t *field,
 						out[i] = c + '0';
 				}
 			}
-			out[2 * FRU_FIELDDATALEN(field->typelen)] = 0; // Terminate the string
+			out[2 * FRU_FIELDDATALEN(typelen)] = 0; // Terminate the string
 			// Strip trailing spaces that may have emerged when a string of odd
 			// length was BCD-encoded.
 			cut_tail(out);
 		}
 		else {
-			memcpy(out, field->data, FRU_FIELDDATALEN(field->typelen));
-			out[FRU_FIELDDATALEN(field->typelen)] = 0; // Terminate the string
+			memcpy(out, data, FRU_FIELDDATALEN(typelen));
+			out[FRU_FIELDDATALEN(typelen)] = 0; // Terminate the string
 		}
 	}
 
@@ -525,6 +526,33 @@ err:
 	return out;
 }
 
+static bool fru_decode_custom_fields(const uint8_t *data, fru_reclist_t **reclist) {
+	while (true) {
+		uint8_t typelen;
+        typelen = data[0];
+		if (typelen == 0xc1)
+			break;
+        data++;
+
+		fru_reclist_t *custom_field = add_reclist(reclist);
+		if (custom_field == NULL)
+            return false;
+
+		// Create a NUL terminated verion of the data for encoding
+		// TODO pass the length into fru_encode_data instead
+		size_t length = FRU_FIELDDATALEN(typelen);
+		uint8_t *buff = malloc(length + 1);
+		if (buff == NULL)
+			return false;
+		memcpy(buff, data, length);
+		buff[length] = 0;
+		custom_field->rec = fru_encode_data(LEN_AUTO, buff);
+		data += FRU_FIELDDATALEN(typelen);
+	}
+
+    return true;
+}
+
 /**
  * Allocate and build a Chassis Information Area block.
  *
@@ -570,6 +598,35 @@ fru_chassis_area_t * fru_encode_chassis_info(const fru_exploded_chassis_t *chass
 	                           ARRAY_SZ(strings), strings);
 
 	return out;
+}
+
+bool fru_decode_chassis_info(
+    const fru_chassis_area_t *area, //< [in] encoded chassis
+    fru_exploded_chassis_t *chassis_out //< [out]
+)
+{
+    uint8_t typelen;
+
+    chassis_out->type = area->langtype;
+	const uint8_t *curr_data = area->data;
+    typelen = curr_data[0];
+    curr_data++;
+
+	if(!fru_decode_data(typelen, curr_data, chassis_out->pn,
+                       sizeof(chassis_out->pn)))
+        return false;
+    curr_data += FRU_FIELDDATALEN(typelen);
+
+    typelen = curr_data[0];
+    curr_data++;
+    if (!fru_decode_data(typelen, curr_data, chassis_out->serial,
+                         sizeof(chassis_out->serial)))
+        return false;
+    curr_data += FRU_FIELDDATALEN(typelen);
+
+    fru_decode_custom_fields(curr_data, &chassis_out->cust);
+
+    return true;
 }
 
 /**
@@ -830,7 +887,8 @@ void test_encodings(void)
 		dump(FRU_FIELDSIZE(field->typelen), (uint8_t *)field);
 		printf("Decoding... ");
 
-		if (!fru_decode_data(field->typelen, out, FRU_FIELDMAXARRAY)) {
+		if (!fru_decode_data(field->typelen, &field->data, out,
+                             FRU_FIELDMAXARRAY)) {
 			printf("FAIL!");
 			goto next;
 		}
