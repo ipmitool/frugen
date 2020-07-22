@@ -4,7 +4,10 @@
 #include "fru_reader.h"
 #include "fatal.h"
 
-static void safe_read(int fd, void *buffer, size_t length) {
+static void safe_read(int fd, uint8_t *buffer, size_t length) {
+	if (!buffer)
+		fatal("Cannot read into NULL buffer");
+
 	size_t total_bytes_read = 0;
 	while (total_bytes_read != length) {
 		ssize_t bytes_read = read(
@@ -22,7 +25,7 @@ fru_t *read_fru_header(int fd) {
 	fru_t *fru = malloc(sizeof(fru_t));
 	if (!fru)
 		return NULL;
-	safe_read(fd, fru, sizeof(fru_t));
+	safe_read(fd, (uint8_t*)fru, sizeof(fru_t));
 	return fru;
 }
 
@@ -34,12 +37,12 @@ fru_chassis_area_t *read_fru_chassis_area(int fd) {
 	fru_chassis_area_t *area = malloc(base_len);
 	if (!area)
 		return NULL;
-	safe_read(fd, area, base_len);
+	safe_read(fd, (uint8_t*)area, base_len);
 	size_t data_len = 8 * area->blocks;
 	area = realloc(area, data_len);
 	if (!area)
 		return NULL;
-	safe_read(fd, &area->data, data_len - base_len);
+	safe_read(fd, (uint8_t*)&area->data, data_len - base_len);
 
 	return area;
 }
@@ -52,12 +55,12 @@ fru_board_area_t *read_fru_board_area(int fd) {
 	fru_board_area_t *area = malloc(base_len);
 	if (!area)
 		return NULL;
-	safe_read(fd, area, base_len);
+	safe_read(fd, (uint8_t*)area, base_len);
 	size_t data_len = 8 * area->blocks;
 	area = realloc(area, data_len);
 	if (!area)
 		return NULL;
-	safe_read(fd, &area->data, data_len - base_len);
+	safe_read(fd, (uint8_t*)&area->data, data_len - base_len);
 
 	return area;
 }
@@ -70,12 +73,12 @@ fru_product_area_t *read_fru_product_area(int fd) {
 	fru_product_area_t *area = malloc(base_len);
 	if (!area)
 		return NULL;
-	safe_read(fd, area, base_len);
+	safe_read(fd, (uint8_t*)area, base_len);
 	size_t data_len = 8 * area->blocks;
 	area = realloc(area, data_len);
 	if (!area)
 		return NULL;
-	safe_read(fd, &area->data, data_len - base_len);
+	safe_read(fd, (uint8_t*)&area->data, data_len - base_len);
 
 	return area;
 }

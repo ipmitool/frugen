@@ -29,6 +29,17 @@
 #define DEBUG(f, args...)
 #endif
 
+static time_t epoch_seconds_1996() {
+	struct tm tm_1996 = {
+		.tm_year = 96,
+		.tm_mon = 0,
+		.tm_mday = 1
+	};
+	// The argument to mktime is zoneless
+	return mktime(&tm_1996);
+}
+
+
 /**
  * Strip trailing spaces
  */
@@ -302,7 +313,7 @@ bool fru_decode_data(uint8_t typelen, //< [in] typelen for the raw data
 		return fru_decode_6bit(typelen, data, out, out_len);
 	}
 	else {
-        if (out_len < (FRU_FIELDDATALEN(typelen) + 1))
+	    if (out_len < (FRU_FIELDDATALEN(typelen) + 1))
 			return false;
 
 		if (FRU_ISTYPE(typelen, BCDPLUS)) {
@@ -436,13 +447,7 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
 
 	if (FRU_AREA_HAS_DATE(atype)) {
 		uint32_t fru_time;
-		struct tm tm_1996 = {
-			.tm_year = 96,
-			.tm_mon = 0,
-			.tm_mday = 1
-		};
 		const struct timeval tv_unspecified = { 0 };
-		struct timeval tv_1996 = { 0 };
 
 		if (!tv) {
 			errno = EFAULT;
@@ -457,10 +462,8 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
 			printf("Using FRU_DATE_UNSPECIFIED\n");
 			fru_time = FRU_DATE_UNSPECIFIED;
 		} else {
-			// The argument to mktime is zoneless
-			tv_1996.tv_sec = mktime(&tm_1996);
 			// FRU time is in minutes and we don't care about microseconds
-			fru_time = (tv->tv_sec - tv_1996.tv_sec) / 60;
+			fru_time = (tv->tv_sec - epoch_seconds_1996()) / 60;
 		}
 		header.mfgdate[0] = fru_time         & 0xFF;
 		header.mfgdate[1] = (fru_time >> 8)  & 0xFF;
@@ -529,16 +532,16 @@ err:
 static bool fru_decode_custom_fields(const uint8_t *data, fru_reclist_t **reclist) {
 	while (true) {
 		uint8_t typelen;
-        typelen = data[0];
+	    typelen = data[0];
 		if (typelen == 0xc1)
 			break;
-        data++;
+	    data++;
 
 		fru_reclist_t *custom_field = add_reclist(reclist);
 		if (custom_field == NULL)
-            return false;
+	        return false;
 
-		// Create a NUL terminated verion of the data for encoding
+		// Create a NUL terminated version of the data for encoding
 		// TODO pass the length into fru_encode_data instead
 		size_t length = FRU_FIELDDATALEN(typelen);
 		uint8_t *buff = malloc(length + 1);
@@ -550,7 +553,7 @@ static bool fru_decode_custom_fields(const uint8_t *data, fru_reclist_t **reclis
 		data += FRU_FIELDDATALEN(typelen);
 	}
 
-    return true;
+	return true;
 }
 
 /**
@@ -605,28 +608,28 @@ bool fru_decode_chassis_info(
     fru_exploded_chassis_t *chassis_out //< [out]
 )
 {
-    uint8_t typelen;
+	uint8_t typelen;
 
-    chassis_out->type = area->langtype;
+	chassis_out->type = area->langtype;
 	const uint8_t *curr_data = area->data;
-    typelen = curr_data[0];
-    curr_data++;
+	typelen = curr_data[0];
+	curr_data++;
 
 	if(!fru_decode_data(typelen, curr_data, chassis_out->pn,
                        sizeof(chassis_out->pn)))
-        return false;
-    curr_data += FRU_FIELDDATALEN(typelen);
+		return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
 
-    typelen = curr_data[0];
-    curr_data++;
-    if (!fru_decode_data(typelen, curr_data, chassis_out->serial,
-                         sizeof(chassis_out->serial)))
-        return false;
-    curr_data += FRU_FIELDDATALEN(typelen);
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, chassis_out->serial,
+	                     sizeof(chassis_out->serial)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
 
-    fru_decode_custom_fields(curr_data, &chassis_out->cust);
+	fru_decode_custom_fields(curr_data, &chassis_out->cust);
 
-    return true;
+	return true;
 }
 
 /**
@@ -679,60 +682,55 @@ bool fru_decode_board_info(
     fru_exploded_board_t *board_out //< [out]
 )
 {
-    uint8_t typelen;
+	uint8_t typelen;
 
 	const uint8_t *curr_data = area->data;
 
-    board_out->lang = area->langtype;
+	board_out->lang = area->langtype;
 
-    uint32_t *min_since_1996 = (uint32_t*)&(area->mfgdate);
-    struct tm tm_1996 = {
-        .tm_year = 96,
-        .tm_mon = 0,
-        .tm_mday = 1
-    };
-    // The argument to mktime is zoneless
-    board_out->tv.tv_sec = mktime(&tm_1996) + 60 * (*min_since_1996);
+	uint32_t *min_since_1996 = (uint32_t*)&(area->mfgdate);
+	// The argument to mktime is zoneless
+	board_out->tv.tv_sec = epoch_seconds_1996() + 60 * (*min_since_1996);
 
-    typelen = curr_data[0];
-    curr_data++;
-    if (!fru_decode_data(typelen, curr_data, board_out->mfg,
-                         sizeof(board_out->mfg)))
-        return false;
-    curr_data += FRU_FIELDDATALEN(typelen);
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, board_out->mfg,
+	                     sizeof(board_out->mfg)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
 
-    typelen = curr_data[0];
-    curr_data++;
-    if (!fru_decode_data(typelen, curr_data, board_out->pname,
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, board_out->pname,
                          sizeof(board_out->pname)))
-        return false;
-    curr_data += FRU_FIELDDATALEN(typelen);
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
 
-    typelen = curr_data[0];
-    curr_data++;
-    if (!fru_decode_data(typelen, curr_data, board_out->serial,
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, board_out->serial,
                          sizeof(board_out->serial)))
-        return false;
-    curr_data += FRU_FIELDDATALEN(typelen);
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
 
-    typelen = curr_data[0];
-    curr_data++;
-    if (!fru_decode_data(typelen, curr_data, board_out->pn,
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, board_out->pn,
                          sizeof(board_out->pn)))
-        return false;
-    curr_data += FRU_FIELDDATALEN(typelen);
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
 
-    typelen = curr_data[0];
-    curr_data++;
-    if (!fru_decode_data(typelen, curr_data, board_out->file,
-                         sizeof(board_out->file)))
-        return false;
-    curr_data += FRU_FIELDDATALEN(typelen);
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, board_out->file,
+	                     sizeof(board_out->file)))
+		return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
 
 
-    fru_decode_custom_fields(curr_data, &board_out->cust);
+	fru_decode_custom_fields(curr_data, &board_out->cust);
 
-    return true;
+	return true;
 }
 
 /**
@@ -790,66 +788,66 @@ bool fru_decode_product_info(
     fru_exploded_product_t *product_out //< [out]
 )
 {
-    uint8_t typelen;
+	uint8_t typelen;
 
 	const uint8_t *curr_data = area->data;
 
-    product_out->lang = area->langtype;
+	product_out->lang = area->langtype;
 
-    typelen = curr_data[0];
-    curr_data++;
-    if (!fru_decode_data(typelen, curr_data, product_out->mfg,
-                         sizeof(product_out->mfg)))
-        return false;
-    curr_data += FRU_FIELDDATALEN(typelen);
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, product_out->mfg,
+	                     sizeof(product_out->mfg)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
 
-    typelen = curr_data[0];
-    curr_data++;
-    if (!fru_decode_data(typelen, curr_data, product_out->pname,
-                         sizeof(product_out->pname)))
-        return false;
-    curr_data += FRU_FIELDDATALEN(typelen);
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, product_out->pname,
+	                     sizeof(product_out->pname)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
 
-    typelen = curr_data[0];
-    curr_data++;
-    if (!fru_decode_data(typelen, curr_data, product_out->pn,
-                         sizeof(product_out->pn)))
-        return false;
-    curr_data += FRU_FIELDDATALEN(typelen);
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, product_out->pn,
+	                     sizeof(product_out->pn)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
 
-    typelen = curr_data[0];
-    curr_data++;
-    if (!fru_decode_data(typelen, curr_data, product_out->ver,
-                         sizeof(product_out->ver)))
-        return false;
-    curr_data += FRU_FIELDDATALEN(typelen);
-
-
-    typelen = curr_data[0];
-    curr_data++;
-    if (!fru_decode_data(typelen, curr_data, product_out->serial,
-                         sizeof(product_out->serial)))
-        return false;
-    curr_data += FRU_FIELDDATALEN(typelen);
-
-    typelen = curr_data[0];
-    curr_data++;
-    if (!fru_decode_data(typelen, curr_data, product_out->atag,
-                         sizeof(product_out->atag)))
-        return false;
-    curr_data += FRU_FIELDDATALEN(typelen);
-
-    typelen = curr_data[0];
-    curr_data++;
-    if (!fru_decode_data(typelen, curr_data, product_out->file,
-                         sizeof(product_out->file)))
-        return false;
-    curr_data += FRU_FIELDDATALEN(typelen);
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, product_out->ver,
+	                     sizeof(product_out->ver)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
 
 
-    fru_decode_custom_fields(curr_data, &product_out->cust);
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, product_out->serial,
+	                     sizeof(product_out->serial)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
 
-    return true;
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, product_out->atag,
+	                     sizeof(product_out->atag)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, product_out->file,
+	                     sizeof(product_out->file)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+
+	fru_decode_custom_fields(curr_data, &product_out->cust);
+
+	return true;
 }
 
 /**
