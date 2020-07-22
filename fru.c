@@ -29,6 +29,17 @@
 #define DEBUG(f, args...)
 #endif
 
+static time_t epoch_seconds_1996() {
+	struct tm tm_1996 = {
+		.tm_year = 96,
+		.tm_mon = 0,
+		.tm_mday = 1
+	};
+	// The argument to mktime is zoneless
+	return mktime(&tm_1996);
+}
+
+
 /**
  * Strip trailing spaces
  */
@@ -434,13 +445,7 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
 
 	if (FRU_AREA_HAS_DATE(atype)) {
 		uint32_t fru_time;
-		struct tm tm_1996 = {
-			.tm_year = 96,
-			.tm_mon = 0,
-			.tm_mday = 1
-		};
 		const struct timeval tv_unspecified = { 0 };
-		struct timeval tv_1996 = { 0 };
 
 		if (!tv) {
 			errno = EFAULT;
@@ -455,10 +460,8 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
 			printf("Using FRU_DATE_UNSPECIFIED\n");
 			fru_time = FRU_DATE_UNSPECIFIED;
 		} else {
-			// The argument to mktime is zoneless
-			tv_1996.tv_sec = mktime(&tm_1996);
 			// FRU time is in minutes and we don't care about microseconds
-			fru_time = (tv->tv_sec - tv_1996.tv_sec) / 60;
+			fru_time = (tv->tv_sec - epoch_seconds_1996()) / 60;
 		}
 		header.mfgdate[0] = fru_time         & 0xFF;
 		header.mfgdate[1] = (fru_time >> 8)  & 0xFF;
@@ -534,7 +537,7 @@ static bool fru_decode_custom_fields(const uint8_t *data, fru_reclist_t **reclis
 
 		fru_reclist_t *custom_field = add_reclist(reclist);
 		if (custom_field == NULL)
-            return false;
+	        return false;
 
 		// Create a NUL terminated version of the data for encoding
 		// TODO pass the length into fru_encode_data instead
@@ -548,7 +551,7 @@ static bool fru_decode_custom_fields(const uint8_t *data, fru_reclist_t **reclis
 		data += FRU_FIELDSIZE(field->typelen);
 	}
 
-    return true;
+	return true;
 }
 
 /**
@@ -673,53 +676,53 @@ bool fru_decode_board_info(
     fru_exploded_board_t *board_out //< [out]
 )
 {
-    fru_field_t *field;
+	fru_field_t *field;
 	const uint8_t *data = area->data;
 
-    board_out->lang = area->langtype;
+	board_out->lang = area->langtype;
 
-    uint32_t *min_since_1996 = (uint32_t*)&(area->mfgdate);
-    struct tm tm_1996 = {
+	uint32_t *min_since_1996 = (uint32_t*)&(area->mfgdate);
+	struct tm tm_1996 = {
         .tm_year = 96,
         .tm_mon = 0,
         .tm_mday = 1
-    };
-    // The argument to mktime is zoneless
-    board_out->tv.tv_sec = mktime(&tm_1996) + 60 * (*min_since_1996);
+	};
+	// The argument to mktime is zoneless
+	board_out->tv.tv_sec = mktime(&tm_1996) + 60 * (*min_since_1996);
 
 	field = (fru_field_t*)data;
-    if (!fru_decode_data(field, board_out->mfg,
+	if (!fru_decode_data(field, board_out->mfg,
                          sizeof(board_out->mfg)))
-        return false;
+		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
 	field = (fru_field_t*)data;
-    if (!fru_decode_data(field, board_out->pname,
+	if (!fru_decode_data(field, board_out->pname,
                          sizeof(board_out->pname)))
-        return false;
+		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
 	field = (fru_field_t*)data;
-    if (!fru_decode_data(field, board_out->serial,
+	if (!fru_decode_data(field, board_out->serial,
                          sizeof(board_out->serial)))
-        return false;
+		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
 	field = (fru_field_t*)data;
-    if (!fru_decode_data(field, board_out->pn,
+	if (!fru_decode_data(field, board_out->pn,
                          sizeof(board_out->pn)))
-        return false;
+		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
 	field = (fru_field_t*)data;
-    if (!fru_decode_data(field, board_out->file,
+	if (!fru_decode_data(field, board_out->file,
                          sizeof(board_out->file)))
-        return false;
+		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
-    fru_decode_custom_fields(data, &board_out->cust);
+	fru_decode_custom_fields(data, &board_out->cust);
 
-    return true;
+	return true;
 }
 
 /**
