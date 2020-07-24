@@ -29,6 +29,17 @@
 #define DEBUG(f, args...)
 #endif
 
+static time_t epoch_seconds_1996() {
+	struct tm tm_1996 = {
+		.tm_year = 96,
+		.tm_mon = 0,
+		.tm_mday = 1
+	};
+	// The argument to mktime is zoneless
+	return mktime(&tm_1996);
+}
+
+
 /**
  * Strip trailing spaces
  */
@@ -170,23 +181,27 @@ static fru_field_t *fru_encode_6bit(const unsigned char *s /**< [in] Input strin
 }
 
 /**
- * Allocate a buffer and decode a 6-bit ASCII string from it
+ * Decode a 6-bit ASCII string
+ *
+ * Return false if there were errors during decoding and true otherwise.
  */
-static unsigned char *fru_decode_6bit(const fru_field_t *field)
+static bool fru_decode_6bit(uint8_t typelen, //<[in] typelen of encoded buffer
+                            const uint8_t *data, //< [in] buffer containing encoded 6bit ascii
+                            uint8_t *out, //< [out] buffer to decode into
+                            size_t out_len) //< [in] length of output buffer
 {
-	unsigned char *out = NULL;
 	const unsigned char *s6;
 	int len, len6bit;
 	int i, i6;
 
-	if (!field) return out;
+	if (!data) return false;
 
-	len6bit = FRU_FIELDDATALEN(field->typelen);
-	s6 = field->data;
+	len6bit = FRU_FIELDDATALEN(typelen);
+	s6 = data;
 
 	len = FRU_6BIT_FULLLENGTH(len6bit);
-	if (!(out = malloc(len + 1))) {
-		return out;
+	if (out_len < (len + 1)) {
+		return false;
 	}
 	DEBUG("Allocated a destination buffer at %p\n", out);
 	memset(out, 0, len + 1);
@@ -224,7 +239,7 @@ static unsigned char *fru_decode_6bit(const fru_field_t *field)
 	// string that was a byte shorter than a multiple of 4.
 	cut_tail(out);
 
-	return out;
+	return true;
 }
 
 /**
@@ -280,31 +295,33 @@ fru_field_t * fru_encode_data(int len, const uint8_t *data)
 }
 
 /**
- * Allocate a buffer and decode the data from it.
+ * Decode data from a buffer into another buffer.
  *
- * For binary data use FRU_FIELDDATALEN(field->typelen) to find
- * out the size of the returned buffer.
+ * For binary data use FRU_FIELDDATALEN(typelen) to find
+ * out the size of valid bytes in the returned buffer.
+ *
+ * Return false if there were errors during decoding and true otherwise.
  */
-static
-unsigned char * fru_decode_data(const fru_field_t *field)
+bool fru_decode_data(uint8_t typelen, //< [in] typelen for the raw data
+                     const uint8_t *data, //<[in] buffer containing raw data
+                     uint8_t *out, //< [out] buffer to decode into
+                     size_t out_len) // <[in] length of output buffer
 {
-	unsigned char * out;
+	if (!data) return false;
 
-	if (!field) return NULL;
-
-	if (FRU_ISTYPE(field->typelen, ASCII_6BIT)) {
-		out = fru_decode_6bit(field);
+	if (FRU_ISTYPE(typelen, ASCII_6BIT)) {
+		return fru_decode_6bit(typelen, data, out, out_len);
 	}
 	else {
-		out = malloc(FRU_FIELDDATALEN(field->typelen) + 1);
-		if (!out) return NULL;
+	    if (out_len < (FRU_FIELDDATALEN(typelen) + 1))
+			return false;
 
-		if (FRU_ISTYPE(field->typelen, BCDPLUS)) {
+		if (FRU_ISTYPE(typelen, BCDPLUS)) {
 			int i;
 			uint8_t c;
 			/* Copy the data and pack it as BCD */
-			for (i = 0; i < 2 * FRU_FIELDDATALEN(field->typelen); i++) {
-				c = (field->data[i / 2] >> ((i % 2) ? 0 : 4)) & 0x0F;
+			for (i = 0; i < 2 * FRU_FIELDDATALEN(typelen); i++) {
+				c = (data[i / 2] >> ((i % 2) ? 0 : 4)) & 0x0F;
 				switch(c) {
 					case 0xA:
 						out[i] = ' ';
@@ -319,18 +336,18 @@ unsigned char * fru_decode_data(const fru_field_t *field)
 						out[i] = c + '0';
 				}
 			}
-			out[2 * FRU_FIELDDATALEN(field->typelen)] = 0; // Terminate the string
+			out[2 * FRU_FIELDDATALEN(typelen)] = 0; // Terminate the string
 			// Strip trailing spaces that may have emerged when a string of odd
 			// length was BCD-encoded.
 			cut_tail(out);
 		}
 		else {
-			memcpy(out, field->data, FRU_FIELDDATALEN(field->typelen));
-			out[FRU_FIELDDATALEN(field->typelen)] = 0; // Terminate the string
+			memcpy(out, data, FRU_FIELDDATALEN(typelen));
+			out[FRU_FIELDDATALEN(typelen)] = 0; // Terminate the string
 		}
 	}
 
-	return out;
+	return true;
 }
 
 #if 0
@@ -430,13 +447,7 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
 
 	if (FRU_AREA_HAS_DATE(atype)) {
 		uint32_t fru_time;
-		struct tm tm_1996 = {
-			.tm_year = 96,
-			.tm_mon = 0,
-			.tm_mday = 1
-		};
 		const struct timeval tv_unspecified = { 0 };
-		struct timeval tv_1996 = { 0 };
 
 		if (!tv) {
 			errno = EFAULT;
@@ -451,10 +462,8 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
 			printf("Using FRU_DATE_UNSPECIFIED\n");
 			fru_time = FRU_DATE_UNSPECIFIED;
 		} else {
-			// The argument to mktime is zoneless
-			tv_1996.tv_sec = mktime(&tm_1996);
 			// FRU time is in minutes and we don't care about microseconds
-			fru_time = (tv->tv_sec - tv_1996.tv_sec) / 60;
+			fru_time = (tv->tv_sec - epoch_seconds_1996()) / 60;
 		}
 		header.mfgdate[0] = fru_time         & 0xFF;
 		header.mfgdate[1] = (fru_time >> 8)  & 0xFF;
@@ -520,6 +529,33 @@ err:
 	return out;
 }
 
+static bool fru_decode_custom_fields(const uint8_t *data, fru_reclist_t **reclist) {
+	while (true) {
+		uint8_t typelen;
+	    typelen = data[0];
+		if (typelen == 0xc1)
+			break;
+	    data++;
+
+		fru_reclist_t *custom_field = add_reclist(reclist);
+		if (custom_field == NULL)
+	        return false;
+
+		// Create a NUL terminated version of the data for encoding
+		// TODO pass the length into fru_encode_data instead
+		size_t length = FRU_FIELDDATALEN(typelen);
+		uint8_t *buff = malloc(length + 1);
+		if (buff == NULL)
+			return false;
+		memcpy(buff, data, length);
+		buff[length] = 0;
+		custom_field->rec = fru_encode_data(LEN_AUTO, buff);
+		data += FRU_FIELDDATALEN(typelen);
+	}
+
+	return true;
+}
+
 /**
  * Allocate and build a Chassis Information Area block.
  *
@@ -538,7 +574,7 @@ err:
  * @returns fru_info_area_t *area A newly allocated buffer containing the created area
  *
  */
-fru_chassis_area_t * fru_chassis_info(const fru_exploded_chassis_t *chassis) ///< [in] Exploded chassis info area
+fru_chassis_area_t * fru_encode_chassis_info(const fru_exploded_chassis_t *chassis) ///< [in] Exploded chassis info area
 {
 	int i;
 
@@ -567,6 +603,35 @@ fru_chassis_area_t * fru_chassis_info(const fru_exploded_chassis_t *chassis) ///
 	return out;
 }
 
+bool fru_decode_chassis_info(
+    const fru_chassis_area_t *area, //< [in] encoded chassis
+    fru_exploded_chassis_t *chassis_out //< [out]
+)
+{
+	uint8_t typelen;
+
+	chassis_out->type = area->langtype;
+	const uint8_t *curr_data = area->data;
+	typelen = curr_data[0];
+	curr_data++;
+
+	if(!fru_decode_data(typelen, curr_data, chassis_out->pn,
+                       sizeof(chassis_out->pn)))
+		return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, chassis_out->serial,
+	                     sizeof(chassis_out->serial)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+	fru_decode_custom_fields(curr_data, &chassis_out->cust);
+
+	return true;
+}
+
 /**
  * Allocate and build a Board Information Area block.
  *
@@ -585,7 +650,7 @@ fru_chassis_area_t * fru_chassis_info(const fru_exploded_chassis_t *chassis) ///
  * @returns fru_info_area_t *area A newly allocated buffer containing the created area
  *
  */
-fru_board_area_t * fru_board_info(const fru_exploded_board_t *board) ///< [in] Exploded board information area
+fru_board_area_t * fru_encode_board_info(const fru_exploded_board_t *board) ///< [in] Exploded board information area
 {
 	int i;
 
@@ -612,6 +677,62 @@ fru_board_area_t * fru_board_info(const fru_exploded_board_t *board) ///< [in] E
 	return out;
 }
 
+bool fru_decode_board_info(
+    const fru_board_area_t *area, //< [in] encoded board
+    fru_exploded_board_t *board_out //< [out]
+)
+{
+	uint8_t typelen;
+
+	const uint8_t *curr_data = area->data;
+
+	board_out->lang = area->langtype;
+
+	uint32_t *min_since_1996 = (uint32_t*)&(area->mfgdate);
+	// The argument to mktime is zoneless
+	board_out->tv.tv_sec = epoch_seconds_1996() + 60 * (*min_since_1996);
+
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, board_out->mfg,
+	                     sizeof(board_out->mfg)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, board_out->pname,
+                         sizeof(board_out->pname)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, board_out->serial,
+                         sizeof(board_out->serial)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, board_out->pn,
+                         sizeof(board_out->pn)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, board_out->file,
+	                     sizeof(board_out->file)))
+		return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+
+	fru_decode_custom_fields(curr_data, &board_out->cust);
+
+	return true;
+}
+
 /**
  * Allocate and build a Product Information Area block.
  *
@@ -630,7 +751,7 @@ fru_board_area_t * fru_board_info(const fru_exploded_board_t *board) ///< [in] E
  * @returns fru_info_area_t *area A newly allocated buffer containing the created area
  *
  */
-fru_product_area_t * fru_product_info(const fru_exploded_product_t *product) ///< [in] Exploded product information area
+fru_product_area_t * fru_encode_product_info(const fru_exploded_product_t *product) ///< [in] Exploded product information area
 {
 	int i;
 
@@ -661,6 +782,74 @@ fru_product_area_t * fru_product_info(const fru_exploded_product_t *product) ///
 
 	return out;
 }
+
+bool fru_decode_product_info(
+    const fru_product_area_t *area, //< [in] encoded product
+    fru_exploded_product_t *product_out //< [out]
+)
+{
+	uint8_t typelen;
+
+	const uint8_t *curr_data = area->data;
+
+	product_out->lang = area->langtype;
+
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, product_out->mfg,
+	                     sizeof(product_out->mfg)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, product_out->pname,
+	                     sizeof(product_out->pname)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, product_out->pn,
+	                     sizeof(product_out->pn)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, product_out->ver,
+	                     sizeof(product_out->ver)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, product_out->serial,
+	                     sizeof(product_out->serial)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, product_out->atag,
+	                     sizeof(product_out->atag)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+	typelen = curr_data[0];
+	curr_data++;
+	if (!fru_decode_data(typelen, curr_data, product_out->file,
+	                     sizeof(product_out->file)))
+	    return false;
+	curr_data += FRU_FIELDDATALEN(typelen);
+
+
+	fru_decode_custom_fields(curr_data, &product_out->cust);
+
+	return true;
+}
+
 /**
  * Create a FRU information file.
  *
@@ -789,7 +978,7 @@ void test_encodings(void)
 
 	for(i = 0; i < ARRAY_SZ(test_strings); i++) {
 		fru_field_t *field;
-		const unsigned char *out;
+		const unsigned char out[FRU_FIELDMAXARRAY];
 
 		printf("Data set %d.\n", i);
 		printf("Original data ");
@@ -825,8 +1014,8 @@ void test_encodings(void)
 		dump(FRU_FIELDSIZE(field->typelen), (uint8_t *)field);
 		printf("Decoding... ");
 
-		out = fru_decode_data(field);
-		if (!out) {
+		if (!fru_decode_data(field->typelen, &field->data, out,
+                             FRU_FIELDMAXARRAY)) {
 			printf("FAIL!");
 			goto next;
 		}
@@ -849,7 +1038,6 @@ void test_encodings(void)
 			printf("FAIL!");
 		}
 
-		free((void *)out);
 next:
 		free((void *)field);
 		printf("\n\n");

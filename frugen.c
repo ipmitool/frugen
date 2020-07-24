@@ -15,17 +15,13 @@
 #include <time.h>
 #include <errno.h>
 #include "fru.h"
+#include "fru_reader.h"
 #include "smbios.h"
+#include "fatal.h"
 
 #ifdef __HAS_JSON__
 #include <json-c/json.h>
 #endif
-
-#define fatal(fmt, args...) do {  \
-	fprintf(stderr, fmt, ##args); \
-	fprintf(stderr, "\n");        \
-	exit(1);                      \
-} while(0)
 
 volatile int debug_level = 0;
 #define debug(level, fmt, args...) do { \
@@ -38,7 +34,6 @@ volatile int debug_level = 0;
 		errno = e;                      \
 	}                                   \
 } while(0)
-
 
 /**
  * Convert 2 bytes of hex string into a binary byte
@@ -264,6 +259,9 @@ int main(int argc, char *argv[])
 		/* Set input file format to JSON */
 		{ .name = "json",          .val = 'j', .has_arg = false },
 
+		/* Set input file format to raw binary */
+		{ .name = "raw",          .val = 'r', .has_arg = false },
+
 		/* Set file to load the data from */
 		{ .name = "from",          .val = 'z', .has_arg = true },
 
@@ -302,6 +300,7 @@ int main(int argc, char *argv[])
 			    "\n\t\t"
 			    "There must be an even number of characters in a 'binary' argument",
 		['j'] = "Set input text file format to JSON (default). Specify before '--from'",
+		['r'] = "Set input file format to raw binary. Specify before '--from'",
 		['z'] = "Load FRU information from a text file",
 		/* Chassis info area related options */
 		['t'] = "Set chassis type (hex). Defaults to 0x02 ('Unknown')",
@@ -336,7 +335,8 @@ int main(int argc, char *argv[])
 	     has_internal = false,
 	     has_multirec = false;
 
-	bool use_json = true; /* TODO: Add more input formats, consider libconfig */
+	bool use_json = false; /* TODO: Add more input formats, consider libconfig */
+	bool use_binary = false;
 
 	do {
 		fru_reclist_t **custom = NULL;
@@ -376,6 +376,16 @@ int main(int argc, char *argv[])
 
 			case 'j': // json
 				use_json = true;
+				if (use_binary) {
+					fatal("Can't specify --json and --raw together");
+				}
+				break;
+
+			case 'r': // binary
+				use_binary = true;
+				if (use_json) {
+					fatal("Can't specify --json and --raw together");
+				}
 				break;
 
 			case 'z': // from
@@ -459,6 +469,61 @@ int main(int argc, char *argv[])
 #else
 					fatal("JSON support was disabled at compile time");
 #endif
+				}
+				else if (use_binary) {
+					int fd = open(optarg, O_RDONLY);
+					if (fd < 0) {
+						fatal("Failed to open file: %s", strerror(errno));
+					}
+
+					fru_t *raw_fru = read_fru_header(fd);
+					if (!raw_fru)
+						fatal("Failed to read fru header");
+
+					if (raw_fru->chassis != 0) {
+						if (lseek(fd, 8 * raw_fru->chassis, SEEK_SET) < 0)
+							fatal("Failed to seek");
+
+						fru_chassis_area_t *chassis_raw =
+							read_fru_chassis_area(fd);
+						bool success = fru_decode_chassis_info(
+							chassis_raw, &chassis);
+						if (!success)
+							fatal("Failed to decode chassis");
+
+						free(chassis_raw);
+						has_chassis = true;
+					}
+					if (raw_fru->board != 0) {
+						if(lseek(fd, 8 * raw_fru->board, SEEK_SET) < 0)
+							fatal("Failed to seek");
+
+						fru_board_area_t *board_raw = read_fru_board_area(fd);
+						bool success = fru_decode_board_info(board_raw, &board);
+						if (!success)
+							fatal("Failed to decode board");
+
+						free(board_raw);
+						has_board = true;
+						has_bdate = true;
+					}
+					if (raw_fru->product != 0) {
+						if (lseek(fd, 8 * raw_fru->product, SEEK_SET) < 0)
+							fatal("Failed to seek");
+
+						fru_product_area_t *product_raw =
+							read_fru_product_area(fd);
+						bool success =
+							fru_decode_product_info(product_raw, &product);
+						if (!success)
+							fatal("Failed to decode product");
+
+						free(product_raw);
+						has_product = true;
+					}
+
+					free(raw_fru);
+					close(fd);
 				}
 				else {
 					fatal("The requested input file format is not supported");
@@ -593,7 +658,7 @@ int main(int argc, char *argv[])
 		fru_chassis_area_t *ci = NULL;
 		debug(1, "FRU file will have a chassis information area");
 		debug(3, "Chassis information area's custom field list is %p", chassis.cust);
-		ci = fru_chassis_info(&chassis);
+		ci = fru_encode_chassis_info(&chassis);
 		e = errno;
 		free_reclist(chassis.cust);
 
@@ -617,7 +682,7 @@ int main(int argc, char *argv[])
 			board.tv = (struct timeval){0};
 		}
 
-		bi = fru_board_info(&board);
+		bi = fru_encode_board_info(&board);
 		e = errno;
 		free_reclist(board.cust);
 
@@ -634,7 +699,7 @@ int main(int argc, char *argv[])
 		fru_product_area_t *pi = NULL;
 		debug(1, "FRU file will have a product information area");
 		debug(3, "Product information area's custom field list is %p", product.cust);
-		pi = fru_product_info(&product);
+		pi = fru_encode_product_info(&product);
 
 		e = errno;
 		free_reclist(product.cust);
