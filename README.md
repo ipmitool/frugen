@@ -56,13 +56,14 @@ The frugen tool supports the following (limitations imposed by the libfru librar
   * Board area creation (including custom fields)
   * Product area creation (including custom fields)
   * Chassis area creation (including custom fields)
+  * Multirecord area creation (see libfru supported types above)
 
 The limitations:
 
   * All data fields (except custom) are always treated as ASCII text, and the encoding
     is automatically selected based on the byte range of the provided data. Custom fields
     may be forced to be binary using --binary option.
-  * Internal use and Multirecord areas are not supported
+  * Internal use area is not supported
 
 For the most up-to-date information on the frugen tool invocation and options, please
 use `frugen -h`.

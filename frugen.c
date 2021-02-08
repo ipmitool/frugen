@@ -296,6 +296,8 @@ int main(int argc, char *argv[])
 		{ .name = "prod-file",     .val = 'F', .has_arg = true },
 		{ .name = "prod-atag",     .val = 'A', .has_arg = true },
 		{ .name = "prod-custom",   .val = 'P', .has_arg = true },
+		/* MultiRecord area related options */
+		{ .name = "mr-uuid",       .val = 'U', .has_arg = true },
 	};
 
 	const char *option_help[] = {
@@ -332,7 +334,9 @@ int main(int argc, char *argv[])
 		['S'] = "Set product serial number",
 		['F'] = "Set product FRU file ID",
 		['A'] = "Set product Asset Tag",
-		['P'] = "Add a custom product information field, may be used multiple times"
+		['P'] = "Add a custom product information field, may be used multiple times",
+		/* MultiRecord area related options */
+		['U'] = "Set System Unique ID (UUID/GUID)",
 	};
 
 	bool has_chassis  = false,
@@ -341,13 +345,24 @@ int main(int argc, char *argv[])
 	     has_product  = false,
 	     has_internal = false,
 	     has_multirec = false;
+	fru_mr_reclist_t *mr_reclist = NULL;
 
 	bool use_json = true; /* TODO: Add more input formats, consider libconfig */
 
+	unsigned char optstring[ARRAY_SZ(options) * 2 + 1] = {0};
+
+	for (i = 0; i < ARRAY_SZ(options); ++i) {
+		static int k = 0;
+		optstring[k++] = options[i].val;
+		if (options[i].has_arg)
+			optstring[k++] = ':';
+	}
+
 	do {
 		fru_reclist_t **custom = NULL;
+		bool is_mr_record = false; // The current option is an MR area record
 		lindex = -1;
-		opt = getopt_long(argc, argv, "bvht:a:c:C:n:m:d:up:s:f:B:N:G:M:V:S:F:A:P:", options, &lindex);
+		opt = getopt_long(argc, argv, optstring, options, &lindex);
 		switch (opt) {
 			case 'b': // binary
 				debug(2, "Next custom field will be considered binary");
@@ -556,10 +571,34 @@ int main(int argc, char *argv[])
 				has_product = true;
 				custom = &product.cust;
 				break;
+			case 'U': // All multi-record options must be listed here
+			          // and processed later in a separate switch
+				is_mr_record = true;
+				break;
+
 			case '?':
 				exit(1);
 			default:
 				break;
+		}
+
+		if (is_mr_record) {
+			fru_mr_reclist_t *mr_reclist_tail = add_mr_reclist(&mr_reclist);
+			if (!mr_reclist_tail) {
+				fatal("Failed to allocate multirecord area list");
+			}
+			has_multirec = true;
+
+		    switch(opt) {
+				case 'U': // UUID
+					errno = fru_mr_uuid2rec(&mr_reclist_tail->rec, optarg);
+					if (errno) {
+						fatal("Failed to convert UUID: %m");
+					}
+					break;
+				default:
+					fatal("Unknown multirecord option: %c", opt);
+			}
 		}
 
 		if (custom) {
@@ -654,7 +693,24 @@ int main(int argc, char *argv[])
 	}
 
 	if (has_multirec) {
-		fatal("Multirecord area is not yet supported in the library");
+		int e;
+		fru_mr_area_t *mr = NULL;
+		size_t totalbytes = 0;
+		debug(1, "FRU file will have a multirecord area");
+		debug(3, "Multirecord area record list is %p", mr_reclist);
+		mr = fru_mr_area(mr_reclist, &totalbytes);
+
+		e = errno;
+		free_reclist(mr_reclist);
+
+		if (mr) {
+			areas[FRU_MULTIRECORD].data = mr;
+			areas[FRU_MULTIRECORD].blocks = FRU_BLOCKS(totalbytes);
+		}
+		else {
+			errno = e;
+			fatal("Error allocating a multirecord area: %m");
+		}
 	}
 
 	fru = fru_create(areas, &size);
