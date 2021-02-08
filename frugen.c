@@ -1,3 +1,9 @@
+/** @file
+ *  @brief FRU generator utility
+ *
+ *  Copyright (C) 2016-2021 Alexander Amelkin <alexander@amelkin.msk.ru>
+ *  SPDX-License-Identifier: GPL-2.0-or-later OR Apache-2.0
+ */
 #ifndef VERSION
 #define VERSION "v1.0-dirty-orphan"
 #endif

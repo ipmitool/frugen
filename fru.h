@@ -1,5 +1,8 @@
 /** @file
  *  @brief Header for FRU information helper functions
+ *
+ *  Copyright (C) 2016-2021 Alexander Amelkin <alexander@amelkin.msk.ru>
+ *  SPDX-License-Identifier: LGPL-2.0-or-later OR Apache-2.0
  */
 
 #ifndef __FRULIB_FRU_H__

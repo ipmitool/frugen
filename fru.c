@@ -1,5 +1,8 @@
 /** @file
  *  @brief FRU information encoding functions
+ *
+ *  Copyright (C) 2016-2021 Alexander Amelkin <alexander@amelkin.msk.ru>
+ *  SPDX-License-Identifier: LGPL-2.0-or-later OR Apache-2.0
  */
 
 #include "fru.h"

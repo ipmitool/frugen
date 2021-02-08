@@ -2,10 +2,11 @@
 
 ## License
 
-This work is dual-licensed under Apache 2.0 and GPL 2.0 (or any later version).
-You can choose between one of them if you use this work.
+This work is dual-licensed under Apache 2.0 and GPL 2.0 (or any later version)
+for the frugen utility, or under Apache 2.0 and Lesser GPL 2.0 (or any later version)
+for the fru library.
 
-`SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later`
+You can choose between one of them if you use this work.
 
 ## Introduction
 
@@ -15,6 +16,8 @@ full compliance with IPMI FRU Information Storage Definition v1.0, rev. 1.3., se
 http://www.intel.com/content/www/us/en/servers/ipmi/ipmi-platform-mgt-fru-infostorage-def-v1-0-rev-1-3-spec-update.html
 
 ## libfru
+
+`SPDX-License-Identifier: Apache-2.0 OR LGPL-2.0-or-later`
 
 So far supported in libfru:
 
@@ -45,6 +48,8 @@ NOT supported:
   * Miltirecord area record types other than listed above
 
 ## frugen
+
+`SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later`
 
 The frugen tool supports the following (limitations imposed by the libfru library):
 
