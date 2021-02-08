@@ -115,7 +115,7 @@ uint8_t fru_get_typelen(int len,             /**< [in] Length of the data or LEN
 		if (typelen < FRU_MAKETYPE(ASCII_6BIT) && // Do not reduce the range
 		    !isdigit(data[i]) && data[i] != ' ' && data[i] != '-' && data[i] != '.')
 		{
-			// The data doesn't fit into BCD plus, expand to 
+			// The data doesn't fit into BCD plus, expand to
 			DEBUG("[%c] Data is 6-bit ASCII!\n", data[i]);
 			typelen = FRU_TYPELEN(ASCII_6BIT, FRU_6BIT_LENGTH(len));
 		}
@@ -494,7 +494,7 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
 	// Now fill the output buffer. First copy the header.
 	memcpy(outp, &header, headerlen);
 	outp += headerlen;
-	
+
 	DEBUG("area size is %d (%d) bytes\n", totalsize, FRU_BYTES(header.blocks));
 	DEBUG("area size in header is (%d) bytes\n", FRU_BYTES(((fru_info_area_t *)out)->blocks));
 
