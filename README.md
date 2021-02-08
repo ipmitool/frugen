@@ -8,6 +8,8 @@ for the fru library.
 
 You can choose between one of them if you use this work.
 
+`SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later`
+
 ## Introduction
 
 This project was incepted to eventually create a universal, full-featured IPMI
@@ -16,8 +18,6 @@ full compliance with IPMI FRU Information Storage Definition v1.0, rev. 1.3., se
 http://www.intel.com/content/www/us/en/servers/ipmi/ipmi-platform-mgt-fru-infostorage-def-v1-0-rev-1-3-spec-update.html
 
 ## libfru
-
-`SPDX-License-Identifier: Apache-2.0 OR LGPL-2.0-or-later`
 
 So far supported in libfru:
 
@@ -48,8 +48,6 @@ NOT supported:
   * Miltirecord area record types other than listed above
 
 ## frugen
-
-`SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later`
 
 The frugen tool supports the following (limitations imposed by the libfru library):
 

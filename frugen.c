@@ -5,8 +5,10 @@
  *  SPDX-License-Identifier: GPL-2.0-or-later OR Apache-2.0
  */
 #ifndef VERSION
-#define VERSION "v1.0-dirty-orphan"
+#define VERSION "v1.2-dirty-orphan"
 #endif
+
+#define COPYRIGHT_YEARS "2016-2021"
 
 #define _GNU_SOURCE
 #include <getopt.h>
@@ -482,7 +484,9 @@ int main(int argc, char *argv[])
 				debug(debug_level, "Verbosity level set to %d", debug_level);
 				break;
 			case 'h': // help
-				printf("FRU Generator %s (c) 2016-2017, Alexander Amelkin <alexander@amelkin.msk.ru>\n", VERSION);
+				printf("FRU Generator %s (c) %s, "
+					   "Alexander Amelkin <alexander@amelkin.msk.ru>\n",
+					   VERSION, COPYRIGHT_YEARS);
 				printf("\n"
 					   "Usage: frugen [options] <filename>\n"
 					   "\n"
