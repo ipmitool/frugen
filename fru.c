@@ -136,14 +136,13 @@ static fru_field_t *fru_encode_6bit(const unsigned char *s /**< [in] Input strin
 	int len6bit = FRU_6BIT_LENGTH(len);
 	int i, i6;
 	fru_field_t *out = NULL;
+	size_t outlen = sizeof(fru_field_t) + len6bit + 1; // 1 extra for null-byte
 
 	if (len6bit > FRU_FIELDDATALEN(len6bit) ||
-	    !(out = malloc(sizeof(fru_field_t) + len6bit + 1))) // One byte for null-byte
+	    !(out = calloc(1, outlen)))
 	{
 		return out;
 	}
-
-	memset(out->data, 0, len6bit + 1);
 
 	out->typelen = FRU_TYPELEN(ASCII_6BIT, len6bit);
 
@@ -190,11 +189,10 @@ static unsigned char *fru_decode_6bit(const fru_field_t *field)
 	s6 = field->data;
 
 	len = FRU_6BIT_FULLLENGTH(len6bit);
-	if (!(out = malloc(len + 1))) {
+	if (!(out = calloc(1, len + 1))) {
 		return out;
 	}
 	DEBUG("Allocated a destination buffer at %p\n", out);
-	memset(out, 0, len + 1);
 
 	for(i = 0, i6 = 0; i6 <= len6bit && i < len && s6[i6]; i++) {
 		int base = i / 4;
@@ -488,8 +486,7 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
 	header.blocks = FRU_BLOCKS(totalsize); // Round up to multiple of 8 bytes
 	padding_size = header.blocks * FRU_BLOCK_SZ - totalsize;
 
-	out = malloc(FRU_BYTES(header.blocks)); // This will be returned and freed by the caller
-	memset(out, 0, FRU_BYTES(header.blocks));
+	out = calloc(1, FRU_BYTES(header.blocks)); // This will be returned and freed by the caller
 	outp = out;
 
 	if (!out) goto err;
@@ -884,12 +881,10 @@ fru_t * fru_create(fru_area_t area[FRU_MAX_AREAS], size_t *size)
 
 	// Calcute header checksum
 	fruhdr.hchecksum = calc_checksum(&fruhdr, sizeof(fruhdr));
-	out = malloc(FRU_BYTES(totalblocks));
+	out = calloc(1, FRU_BYTES(totalblocks));
 
 	DEBUG("alocated a buffer at %p\n", out);
 	if (!out) return NULL;
-	
-	memset(out, 0, FRU_BYTES(totalblocks));
 
 	memcpy(out, (uint8_t *)&fruhdr, sizeof(fruhdr));
 

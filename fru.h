@@ -145,9 +145,8 @@ static inline fru_reclist_t *add_reclist(fru_reclist_t **reclist)
 {
 	fru_reclist_t *rec;
 	fru_reclist_t *reclist_ptr = *reclist;
-	rec = malloc(sizeof(*rec));
+	rec = calloc(1, sizeof(*rec));
 	if(!rec) return NULL;
-	memset(rec, 0, sizeof(*rec));
 
 	// If the reclist is empty, update it
 	if(!reclist_ptr) {
