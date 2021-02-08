@@ -45,7 +45,7 @@ volatile int debug_level = 0;
 	}                                   \
 } while(0)
 
-
+static
 void hexdump(const void *data, size_t len)
 {
 	size_t i;
@@ -74,6 +74,7 @@ void hexdump(const void *data, size_t len)
 /**
  * Convert 2 bytes of hex string into a binary byte
  */
+static
 long hex2byte(const char *hex) {
 	static const long hextable[256] = {
 		[0 ... 255] = -1,
@@ -95,6 +96,7 @@ long hex2byte(const char *hex) {
 	return ((hi << 4) | lo);
 }
 
+static
 bool datestr_to_tv(const char *datestr, struct timeval *tv)
 {
 	struct tm tm = {0};
@@ -128,6 +130,7 @@ bool datestr_to_tv(const char *datestr, struct timeval *tv)
 	return true;
 }
 
+static
 fru_field_t * fru_encode_custom_binary_field(const char *hexstr)
 {
 	int len, i;
@@ -156,6 +159,7 @@ fru_field_t * fru_encode_custom_binary_field(const char *hexstr)
 }
 
 #ifdef __HAS_JSON__
+static
 bool json_fill_fru_area_fields(json_object *jso, int count,
                                const char *fieldnames[],
                                char *fields[])
@@ -177,11 +181,11 @@ bool json_fill_fru_area_fields(json_object *jso, int count,
 	return data_in_this_area;
 }
 
+static
 bool json_fill_fru_area_custom(json_object *jso, fru_reclist_t **custom)
 {
 	int i, alen;
 	json_object *jsfield;
-	array_list *array;
 	bool data_in_this_area = false;
 	fru_reclist_t *custptr;
 
@@ -192,8 +196,7 @@ bool json_fill_fru_area_custom(json_object *jso, fru_reclist_t **custom)
 	if (!jsfield)
 		return false;
 
-	array = json_object_get_array(jsfield);
-	if (!array)
+	if (json_object_get_type(jsfield) != json_type_array)
 		return false;
 
 	alen = json_object_array_length(jsfield);
@@ -250,6 +253,7 @@ bool json_fill_fru_area_custom(json_object *jso, fru_reclist_t **custom)
 	return data_in_this_area;
 }
 
+static
 bool json_fill_fru_mr_reclist(json_object *jso, fru_mr_reclist_t **mr_reclist)
 {
 	int i, alen;
