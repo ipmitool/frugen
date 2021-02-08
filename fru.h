@@ -81,6 +81,19 @@ typedef enum {
 	FRU_MR_MAX = 0xFF
 } fru_mr_type_t;
 
+/// Table 18-6, Management Access Record
+typedef enum {
+	FRU_MR_MGTM_MIN = 0x01,
+	FRU_MR_MGMT_SYS_URL = 0x01,
+	FRU_MR_MGMT_SYS_NAME = 0x02,
+	FRU_MR_MGMT_SYS_PING = 0x03,
+	FRU_MR_MGMT_COMPONENT_URL = 0x04,
+	FRU_MR_MGMT_COMPONENT_NAME = 0x05,
+	FRU_MR_MGMT_COMPONENT_PING = 0x06,
+	FRU_MR_MGMT_SYS_UUID = 0x07,
+	FRU_MR_MGTM_MAX = 0x07,
+} fru_mr_mgmt_type_t;
+
 #define FRU_IS_ATYPE_VALID(t) ((t) >= FRU_AREA_NOT_PRESENT && (t) < FRU_MAX_AREAS)
 
 /**
@@ -204,6 +217,12 @@ typedef struct {
 	uint8_t data[];        ///< Raw data of size `len`
 } __attribute__((packed)) fru_mr_rec_t;
 
+typedef struct {
+	fru_mr_header_t hdr;
+	uint8_t subtype;
+	uint8_t data[];
+} __attribute__((packed)) fru_mr_mgmt_rec_t;
+
 typedef struct fru_mr_reclist_s {
 	fru_mr_rec_t *rec;
 	struct fru_mr_reclist_s *next;
@@ -283,6 +302,7 @@ fru_chassis_area_t * fru_chassis_info(const fru_exploded_chassis_t *chassis);
 fru_board_area_t * fru_board_info(const fru_exploded_board_t *board);
 fru_product_area_t * fru_product_info(const fru_exploded_product_t *product);
 
+int fru_mr_uuid2rec(fru_mr_rec_t **rec, const unsigned char *str);
 fru_mr_reclist_t * add_mr_reclist(fru_mr_reclist_t **reclist);
 fru_mr_area_t * fru_mr_area(fru_mr_reclist_t *reclist, size_t *total);
 

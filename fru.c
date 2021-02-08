@@ -665,6 +665,80 @@ fru_product_area_t * fru_product_info(const fru_exploded_product_t *product) ///
 }
 
 /**
+ * Take an input string, check that it looks like UUID, and pack it into
+ * an "exploded" multirecord area record in binary form.
+ *
+ * @returns An errno-like negative error code
+ * @retval 0        Success
+ * @retval EINVAL   Invalid UUID string (wrong length, wrong symbols)
+ * @retval EFAULT   Invalid pointer
+ * @retval >0       any other error that calloc() is allowed to retrun
+ */
+int fru_mr_uuid2rec(fru_mr_rec_t **rec, const unsigned char *str)
+{
+	size_t len;
+	fru_mr_mgmt_rec_t *mgmt = NULL;
+	const int UUID_SIZE = 16;
+	const int UUID_STRLEN_NONDASHED = UUID_SIZE * 2; // 2 hex digits for byte
+	const int UUID_STRLEN_DASHED = UUID_STRLEN_NONDASHED + 4;
+
+	// Need a valid non-allocated record pointer and a string
+	if (!rec || *rec) return -EFAULT;
+	if (!str) return -EFAULT;
+
+	len = strlen(str);
+	if(UUID_STRLEN_DASHED != len && UUID_STRLEN_NONDASHED != len) {
+		return -EINVAL;
+	}
+
+	mgmt = calloc(1, sizeof(fru_mr_mgmt_rec_t) + UUID_SIZE);
+	if (!mgmt) return errno;
+
+	mgmt->hdr.type_id = FRU_MR_MGMT_ACCESS;
+	mgmt->hdr.eol_ver = FRU_MR_VER;
+	mgmt->hdr.len = UUID_SIZE + 1; // Include the subtype byte
+	mgmt->subtype = FRU_MR_MGMT_SYS_UUID;
+	while(*str) {
+		static size_t i = 0;
+		int val;
+
+		// Skip dashes
+		if ('-' == *str) {
+			++str;
+			continue;
+		}
+
+		if (!isxdigit(*str)) {
+			free(mgmt);
+			return -EINVAL;
+		}
+
+		val = toupper(*str);
+		if (val < 'A')
+			val = val - '0';
+		else
+			val = val - 'A' + 0xA;
+
+		if (0 == i % 2)
+			mgmt->data[i / 2] = val << 4;
+		else
+			mgmt->data[i / 2] |= val;
+
+		++i;
+		++str;
+	}
+
+	*rec = (fru_mr_rec_t *)mgmt;
+
+	// Checksum the data
+	mgmt->hdr.rec_checksum = calc_checksum((*rec)->data, mgmt->hdr.len);
+
+	// Checksum the header, don't include the checksum byte itself
+	mgmt->hdr.hdr_checksum = calc_checksum(*rec, sizeof(fru_mr_header_t) - 1);
+	return 0;
+}
+
+/**
  * Allocate a new multirecord reclist entry and add it to \a reclist,
  * set \a reclist to point to the newly allocated entry if
  * \a reclist was NULL.

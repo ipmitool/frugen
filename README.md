@@ -31,12 +31,18 @@ So far supported in libfru:
   * Chassis information area creation
   * Board information area creation
   * Product information area creation
+  * Multirecord area creation with the following record types:
+
+    * Management Access Record with the following subtypes:
+
+      * System UUID
+
   * FRU file creation (in a memory buffer)
 
 NOT supported:
 
   * Internal use area creation/reservation in a fru file buffer
-  * Multirecord area creation
+  * Miltirecord area record types other than listed above
 
 ## frugen
 
