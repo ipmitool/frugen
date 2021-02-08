@@ -57,6 +57,30 @@ typedef enum {
 	FRU_PROD_FILE
 } fru_prod_field_t;
 
+/// Table 16-2, MultiRecord Area Record Types
+typedef enum {
+	FRU_MR_MIN = 0x00,
+	FRU_MR_PSU_INFO = 0x00,
+	FRU_MR_DC_OUT = 0x01,
+	FRU_MR_DC_LOAD = 0x02,
+	FRU_MR_MGMT_ACCESS = 0x03,
+	FRU_MR_BASE_COMPAT = 0x04,
+	FRU_MR_EXT_COMPAT = 0x05,
+	FRU_MR_ASF_FIXED_SMBUS = 0x06,
+	FRU_MR_ASF_LEGACY_ALERTS = 0x07,
+	FRU_MR_ASF_REMOTE_CTRL = 0x08,
+	FRU_MR_EXT_DC_OUT = 0x09,
+	FRU_MR_EXT_DC_LOAD = 0x0A,
+	FRU_MR_NVME_B = 0x0B,
+	FRU_MR_NVME_C = 0x0C,
+	FRU_MR_NVME_D = 0x0D,
+	FRU_MR_NVME_E = 0x0E,
+	FRU_MR_NVME_F = 0x0F,
+	FRU_MR_OEM_START = 0xC0,
+	FRU_MR_OEM_END = 0xFF,
+	FRU_MR_MAX = 0xFF
+} fru_mr_type_t;
+
 #define FRU_IS_ATYPE_VALID(t) ((t) >= FRU_AREA_NOT_PRESENT && (t) < FRU_MAX_AREAS)
 
 /**
@@ -122,7 +146,13 @@ static inline fru_reclist_t *add_reclist(fru_reclist_t **reclist)
 
 	return rec;
 }
-#define free_reclist(recp) while(recp) { fru_reclist_t *next = recp->next; free(recp); recp = next; }
+
+/// Works both for fru_reclist_t* and for fru_mr_reclist_t*
+#define free_reclist(recp) while(recp) { \
+	typeof(recp->next) next = recp->next; \
+	free(recp); \
+	recp = next; \
+}
 
 #define FRU_VER_1    1
 #define FRU_MINIMUM_AREA_HEADER \
@@ -157,6 +187,29 @@ typedef struct fru_board_area_s {
 } fru_board_area_t;
 
 typedef fru_info_area_t fru_product_area_t;
+
+typedef struct {
+	uint8_t type_id; ///< Record Type ID
+	uint8_t eol_ver;
+#define FRU_MR_EOL 0x80 // End-of-list flag
+#define FRU_MR_VER_MASK 0x07
+#define FRU_MR_VER 0x02 // Version is always 2
+	uint8_t len;           ///< Length of the raw `data` array
+	uint8_t rec_checksum;
+	uint8_t hdr_checksum;
+} __attribute__((packed)) fru_mr_header_t;
+
+typedef struct {
+	fru_mr_header_t hdr;
+	uint8_t data[];        ///< Raw data of size `len`
+} __attribute__((packed)) fru_mr_rec_t;
+
+typedef struct fru_mr_reclist_s {
+	fru_mr_rec_t *rec;
+	struct fru_mr_reclist_s *next;
+} fru_mr_reclist_t;
+
+typedef fru_mr_rec_t fru_mr_area_t; /// Intended for use as a pointer only
 
 #define FRU_AREA_HAS_DATE(t) (FRU_BOARD_INFO == (t))
 #define FRU_DATE_AREA_HEADER_SZ sizeof(fru_board_area_t)
@@ -229,6 +282,10 @@ typedef struct {
 fru_chassis_area_t * fru_chassis_info(const fru_exploded_chassis_t *chassis);
 fru_board_area_t * fru_board_info(const fru_exploded_board_t *board);
 fru_product_area_t * fru_product_info(const fru_exploded_product_t *product);
+
+fru_mr_reclist_t * add_mr_reclist(fru_mr_reclist_t **reclist);
+fru_mr_area_t * fru_mr_area(fru_mr_reclist_t *reclist, size_t *total);
+
 fru_field_t * fru_encode_data(int len, const uint8_t *data);
 fru_t * fru_create(fru_area_t area[FRU_MAX_AREAS], size_t *size);
 

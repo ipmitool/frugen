@@ -4,6 +4,8 @@
 
 #include "fru.h"
 #include "smbios.h"
+
+#include <ctype.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <ctype.h>
@@ -661,6 +663,91 @@ fru_product_area_t * fru_product_info(const fru_exploded_product_t *product) ///
 
 	return out;
 }
+
+/**
+ * Allocate a new multirecord reclist entry and add it to \a reclist,
+ * set \a reclist to point to the newly allocated entry if
+ * \a reclist was NULL.
+ *
+ * @returns Pointer to the added entry
+ */
+fru_mr_reclist_t *add_mr_reclist(fru_mr_reclist_t **reclist)
+{
+	fru_mr_reclist_t *rec;
+	fru_mr_reclist_t *reclist_ptr = *reclist;
+	rec = calloc(1, sizeof(*rec));
+	if(!rec) return NULL;
+
+	// If the reclist is empty, update it
+	if(!reclist_ptr) {
+		*reclist = rec;
+	} else {
+		// If the reclist is not empty, find the last entry and append the new one as next
+		while(reclist_ptr->next)
+			reclist_ptr = reclist_ptr->next;
+
+		reclist_ptr->next = rec;
+	}
+
+	return rec;
+}
+
+/**
+ * Allocate and build a MultiRecord area block.
+ *
+ * The function will allocate a buffer of size that is required to store all
+ * the provided data and accompanying record headers. It will calculate data
+ * and header checksums automatically.
+ *
+ * All data will be copied as-is, without any additional encoding.
+ *
+ * It is safe to free (deallocate) any arguments supplied to this function
+ * immediately after the call as all the data is copied to the new buffer.
+ *
+ * Don't forget to free() the returned buffer when you don't need it anymore.
+ *
+ * @returns fru_mr_area_t *area  A newly allocated buffer containing the created area
+ *
+ */
+fru_mr_area_t *fru_mr_area(fru_mr_reclist_t *reclist, size_t *total)
+{
+	fru_mr_area_t *area = NULL;
+	fru_mr_rec_t *rec;
+	fru_mr_reclist_t *listitem = reclist;
+
+	// Calculate the cumulative size of all records
+	while (listitem && listitem->rec && listitem->rec->hdr.len) {
+		*total += sizeof(fru_mr_header_t);
+		*total += listitem->rec->hdr.len;
+		listitem = listitem->next;
+	}
+
+	area = calloc(1, *total);
+	if (!area) {
+		*total = 0;
+		return NULL;
+	}
+
+	// Walk the input records and pack them into an MR area
+	listitem = reclist;
+	rec = area;
+	while (listitem && listitem->rec && listitem->rec->hdr.len) {
+		size_t rec_sz = sizeof(fru_mr_header_t) + listitem->rec->hdr.len;
+		memcpy(rec, listitem->rec, rec_sz);
+		if (!listitem->next) {
+			// Update the header and its checksum. Don't include the
+			// checksum byte itself.
+			size_t checksum_span = sizeof(fru_mr_header_t) - 1;
+			rec->hdr.eol_ver |= FRU_MR_EOL;
+			rec->hdr.hdr_checksum = calc_checksum(rec, checksum_span);
+		}
+		rec = (void *)rec + rec_sz;
+		listitem = listitem->next;
+	}
+
+	return area;
+}
+
 /**
  * Create a FRU information file.
  *
