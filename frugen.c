@@ -249,6 +249,86 @@ bool json_fill_fru_area_custom(json_object *jso, fru_reclist_t **custom)
 
 	return data_in_this_area;
 }
+
+bool json_fill_fru_mr_reclist(json_object *jso, fru_mr_reclist_t **mr_reclist)
+{
+	int i, alen;
+	fru_mr_reclist_t *mr_reclist_tail;
+	bool has_multirec = false;
+
+	if (!mr_reclist)
+		goto out;
+
+	if (json_object_get_type(jso) != json_type_array)
+		goto out;
+
+	alen = json_object_array_length(jso);
+	if (!alen)
+		goto out;
+
+	debug(4, "Multirecord area record list is initially at %p", *mr_reclist);
+	mr_reclist_tail = add_mr_reclist(mr_reclist);
+	if (!mr_reclist_tail)
+		fatal("JSON: Failed to allocate multirecord area list");
+
+	debug(4, "Multirecord area record list is now at %p", *mr_reclist);
+	debug(4, "Multirecord area record list tail is at %p", mr_reclist_tail);
+
+	for (i = 0; i < alen; i++) {
+		const char *type = NULL;
+		json_object *item, *ifield;
+
+		item = json_object_array_get_idx(jso, i);
+		if (!item) continue;
+
+		debug(3, "Parsing record #%d/%d", i + 1, alen);
+
+		json_object_object_get_ex(item, "type", &ifield);
+		if (!ifield || !(type = json_object_get_string(ifield))) {
+			fatal("Each multirecord area record must have a type specifier");
+		}
+
+		debug(3, "Record is of type '%s'", type);
+
+		if (!strcmp(type, "management")) {
+			const char *subtype = NULL;
+			json_object_object_get_ex(item, "subtype", &ifield);
+			if (!ifield || !(subtype = json_object_get_string(ifield))) {
+				fatal("Each management record must have a subtype");
+			}
+
+			debug(3, "Management record subtype is '%s'", subtype);
+
+			if (!strcmp(subtype, "uuid")) {
+				const unsigned char *uuid = NULL;
+				json_object_object_get_ex(item, "uuid", &ifield);
+				if (!ifield || !(uuid = json_object_get_string(ifield))) {
+					fatal("A uuid management record must have a uuid field");
+				}
+
+				debug(3, "Parsing UUID %s", uuid);
+				errno = fru_mr_uuid2rec(&mr_reclist_tail->rec, uuid);
+				if (errno)
+					fatal("Failed to convert UUID: %m");
+				debug(2, "System UUID loaded from JSON: %s", uuid);
+				has_multirec = true;
+			}
+			else {
+				fatal("Management Access Record type '%s' "
+				      "is not supported", subtype);
+			}
+		}
+		else {
+			fatal("Multirecord type '%s' is not supported", type);
+			continue;
+		}
+	}
+
+out:
+	return has_multirec;
+}
+
+
 #endif /* __HAS_JSON__ */
 
 int main(int argc, char *argv[])
@@ -495,8 +575,8 @@ int main(int argc, char *argv[])
 							has_product |= json_fill_fru_area_fields(jso, ARRAY_SZ(field), fieldname, field);
 							has_product |= json_fill_fru_area_custom(jso, &product.cust);
 						} else if (!strcmp(iter.key, "multirecord")) {
-							debug(1, "Multirecord area is not yet supported, JSON object skipped");
-							continue;
+							debug(2, "Processing multirecord area records");
+							has_multirec |= json_fill_fru_mr_reclist(jso, &mr_reclist);
 						}
 					}
 

@@ -36,5 +36,7 @@
 			{ "type" : "binary", "data" : "C001BEEF" }
 		]
 	},
-	"multirecord" : null
+	"multirecord" : [
+		{ "type" : "management", "subtype" : "uuid", "uuid" : "9bd70799-ccf0-4915-a7f9-7ce7d64385cf" }
+	]
 }
