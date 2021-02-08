@@ -46,6 +46,31 @@ volatile int debug_level = 0;
 } while(0)
 
 
+void hexdump(const void *data, size_t len)
+{
+	size_t i;
+	const unsigned char *buf = data;
+
+	for (i = 0; i < len; ++i) {
+		if (0 == (i % 16))
+			printf("DEBUG: %04x: ", (unsigned int)i);
+
+		printf("%02X ", buf[i]);
+
+		if (15 == (i % 16))
+			printf("\n");
+	}
+
+	if (i % 16) {
+		printf("\n");
+	}
+}
+
+#define debug_dump(level, data, len, fmt, args...) do { \
+	debug(level, fmt, ##args); \
+	if (level <= debug_level) hexdump(data, len); \
+} while(0)
+
 /**
  * Convert 2 bytes of hex string into a binary byte
  */
@@ -706,6 +731,8 @@ int main(int argc, char *argv[])
 		if (mr) {
 			areas[FRU_MULTIRECORD].data = mr;
 			areas[FRU_MULTIRECORD].blocks = FRU_BLOCKS(totalbytes);
+
+			debug_dump(3, mr, totalbytes, "Multirecord data:");
 		}
 		else {
 			errno = e;
