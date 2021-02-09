@@ -22,6 +22,9 @@
 #include <unistd.h>
 #include <errno.h>
 
+#define _BSD_SOURCE
+#include <endian.h>
+
 #ifdef __STANDALONE__
 #include <stdio.h>
 #endif
@@ -678,9 +681,24 @@ int fru_mr_uuid2rec(fru_mr_rec_t **rec, const unsigned char *str)
 {
 	size_t len;
 	fru_mr_mgmt_rec_t *mgmt = NULL;
+
 	const int UUID_SIZE = 16;
 	const int UUID_STRLEN_NONDASHED = UUID_SIZE * 2; // 2 hex digits for byte
 	const int UUID_STRLEN_DASHED = UUID_STRLEN_NONDASHED + 4;
+
+	union __attribute__((packed)) {
+		uint8_t raw[UUID_SIZE];
+		// The structure is according to DMTF SMBIOS 3.2 Specification
+		struct __attribute__((packed)) {
+			// All words and dwords here must be Little-Endian for SMBIOS
+			uint32_t time_low;
+			uint16_t time_mid;
+			uint16_t time_hi_and_version;
+			uint8_t clock_seq_hi_and_reserved;
+			uint8_t clock_seq_low;
+			uint8_t node[6];
+		};
+	} uuid;
 
 	// Need a valid non-allocated record pointer and a string
 	if (!rec || *rec) return -EFAULT;
@@ -720,13 +738,19 @@ int fru_mr_uuid2rec(fru_mr_rec_t **rec, const unsigned char *str)
 			val = val - 'A' + 0xA;
 
 		if (0 == i % 2)
-			mgmt->data[i / 2] = val << 4;
+			uuid.raw[i / 2] = val << 4;
 		else
-			mgmt->data[i / 2] |= val;
+			uuid.raw[i / 2] |= val;
 
 		++i;
 		++str;
 	}
+
+	// Ensure Little-Endian encoding for SMBIOS specification compatibility
+	uuid.time_low = htole32(be32toh(uuid.time_low));
+	uuid.time_mid = htole16(be16toh(uuid.time_mid));
+	uuid.time_hi_and_version = htole16(be16toh(uuid.time_hi_and_version));
+	memcpy(mgmt->data, uuid.raw, UUID_SIZE);
 
 	*rec = (fru_mr_rec_t *)mgmt;
 
