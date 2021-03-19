@@ -99,7 +99,11 @@ uint8_t fru_get_typelen(int len,             /**< [in] Length of the data or LEN
 
 	// Go through the data and expand charset as needed
 	for (i = 0; i < len; i++) {
-		if (data[i] < ' ') {
+		if (data[i] < ' '
+			&& data[i] != '\t'
+			&& data[i] != '\r'
+			&& data[i] != '\n')
+		{
 			// They lied! The data is binary!
 			// That's the widest range type.
 			// There is no use in checking any further.
@@ -108,7 +112,9 @@ uint8_t fru_get_typelen(int len,             /**< [in] Length of the data or LEN
 			break;
 		}
 
-		if (typelen < FRU_MAKETYPE(TEXT) && data[i] > '_') { // Do not reduce the range
+		if (typelen < FRU_MAKETYPE(TEXT)
+			&& (data[i] > '_' || data[i] < ' '))
+		{ // Do not reduce the range
 			// The data doesn't fit into 6-bit ASCII, expand to simple text.
 			DEBUG("[%c] Data is simple text!\n", data[i]);
 			typelen = FRU_TYPELEN(TEXT, len);
