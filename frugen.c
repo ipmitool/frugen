@@ -492,8 +492,10 @@ int main(int argc, char *argv[])
 					   "\n"
 					   "Options:\n\n");
 				for (i = 0; i < ARRAY_SZ(options); i++) {
-					printf("\t--%s%s\n" /* "\t-%c%s\n" */, options[i].name,
-						                      options[i].has_arg ? " <argument>" : "");
+					printf("\t-%c, --%s%s\n" /* "\t-%c%s\n" */,
+					       options[i].val,
+					       options[i].name,
+					       options[i].has_arg ? " <argument>" : "");
 					printf("\t\t%s.\n\n", option_help[options[i].val]);
 				}
 				printf("Example:\n"
