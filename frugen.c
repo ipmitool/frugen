@@ -378,6 +378,11 @@ int main(int argc, char *argv[])
 		/* Mark the following '*-custom' data as binary */
 		{ .name = "binary",        .val = 'b', .has_arg = false },
 
+		/* Disable autodetection, force ASCII encoding on standard fields,
+		 * Detection of binary (out of ASCII range) stays in place.
+		 */
+		{ .name = "ascii",         .val = 'I', .has_arg = false },
+
 		/* Set input file format to JSON */
 		{ .name = "json",          .val = 'j', .has_arg = false },
 
@@ -420,6 +425,8 @@ int main(int argc, char *argv[])
 			    "Example: frugen --binary --board-custom 0012DEADBEAF\n"
 			    "\n\t\t"
 			    "There must be an even number of characters in a 'binary' argument",
+		['I'] = "Disable auto-encoding on all fields, force ASCII.\n\t\t"
+			    "Out of ASCII range data will still result in binary encoding.",
 		['j'] = "Set input text file format to JSON (default). Specify before '--from'",
 		['z'] = "Load FRU information from a text file",
 		/* Chassis info area related options */
@@ -478,6 +485,9 @@ int main(int argc, char *argv[])
 			case 'b': // binary
 				debug(2, "Next custom field will be considered binary");
 				cust_binary = true;
+				break;
+			case 'I': // ASCII
+				fru_set_autodetect(false);
 				break;
 			case 'v': // verbose
 				debug_level++;

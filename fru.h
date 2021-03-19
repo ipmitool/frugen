@@ -8,6 +8,7 @@
 #ifndef __FRULIB_FRU_H__
 #define __FRULIB_FRU_H__
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -299,6 +300,8 @@ typedef struct {
 } fru_exploded_product_t;
 
 #define fru_loadfield(eafield, value) strncpy(eafield, value, FRU_FIELDMAXLEN)
+
+void fru_set_autodetect(bool enable);
 
 fru_chassis_area_t * fru_chassis_info(const fru_exploded_chassis_t *chassis);
 fru_board_area_t * fru_board_info(const fru_exploded_board_t *board);
