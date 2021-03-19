@@ -37,6 +37,13 @@
 #define DEBUG(f, args...)
 #endif
 
+static bool autodetect = true;
+
+void fru_set_autodetect(bool enable)
+{
+	autodetect = enable;
+}
+
 /**
  * Strip trailing spaces
  */
@@ -92,10 +99,15 @@ uint8_t fru_get_typelen(int len,             /**< [in] Length of the data or LEN
 
 	// As we reach this point, we know the data must be text.
 	// We will try to find the encoding that suits best.
+	if (autodetect) {
+		typelen = FRU_TYPELEN(BCDPLUS, (len + 1) / 2); // By default - the most range-restricted text type
 
-	typelen = FRU_TYPELEN(BCDPLUS, (len + 1) / 2); // By default - the most range-restricted text type
-
-	DEBUG("Assuming BCD plus data...\n");
+		DEBUG("Assuming BCD plus data...\n");
+	}
+	else {
+		DEBUG("Assuming ASCII data...\n");
+		typelen = FRU_TYPELEN(TEXT, len);
+	}
 
 	// Go through the data and expand charset as needed
 	for (i = 0; i < len; i++) {
@@ -112,22 +124,24 @@ uint8_t fru_get_typelen(int len,             /**< [in] Length of the data or LEN
 			break;
 		}
 
-		if (typelen < FRU_MAKETYPE(TEXT)
-			&& (data[i] > '_' || data[i] < ' '))
-		{ // Do not reduce the range
-			// The data doesn't fit into 6-bit ASCII, expand to simple text.
-			DEBUG("[%c] Data is simple text!\n", data[i]);
-			typelen = FRU_TYPELEN(TEXT, len);
-			continue;
-		}
+		if (autodetect) {
+			if (typelen < FRU_MAKETYPE(TEXT)
+				&& (data[i] > '_' || data[i] < ' '))
+			{ // Do not reduce the range
+				// The data doesn't fit into 6-bit ASCII, expand to simple text.
+				DEBUG("[%c] Data is simple text!\n", data[i]);
+				typelen = FRU_TYPELEN(TEXT, len);
+				continue;
+			}
 
-		if (typelen < FRU_MAKETYPE(ASCII_6BIT) && // Do not reduce the range
-		    !isdigit(data[i]) && data[i] != ' ' && data[i] != '-' && data[i] != '.')
-		{
-			// The data doesn't fit into BCD plus, expand to
-			DEBUG("[%c] Data is 6-bit ASCII!\n", data[i]);
-			typelen = FRU_TYPELEN(ASCII_6BIT, FRU_6BIT_LENGTH(len));
-		}
+			if (typelen < FRU_MAKETYPE(ASCII_6BIT) && // Do not reduce the range
+			    !isdigit(data[i]) && data[i] != ' ' && data[i] != '-' && data[i] != '.')
+			{
+				// The data doesn't fit into BCD plus, expand to
+				DEBUG("[%c] Data is 6-bit ASCII!\n", data[i]);
+				typelen = FRU_TYPELEN(ASCII_6BIT, FRU_6BIT_LENGTH(len));
+			}
+		} /* autodetect */
 	}
 
 	return typelen;
