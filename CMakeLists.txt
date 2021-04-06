@@ -9,6 +9,7 @@ execute_process(COMMAND
 	--always
 	--long
 	--dirty
+	--tags
 	WORKING_DIRECTORY
 	"${CMAKE_CURRENT_SOURCE_DIR}"
 	RESULT_VARIABLE
