@@ -166,6 +166,7 @@ static inline fru_reclist_t *add_reclist(fru_reclist_t **reclist)
 /// Works both for fru_reclist_t* and for fru_mr_reclist_t*
 #define free_reclist(recp) while(recp) { \
 	typeof(recp->next) next = recp->next; \
+	free(recp->rec); \
 	free(recp); \
 	recp = next; \
 }
