@@ -133,27 +133,40 @@ bool datestr_to_tv(const char *datestr, struct timeval *tv)
 }
 
 static
-fru_field_t * fru_encode_custom_binary_field(const char *hexstr)
+uint8_t * fru_encode_binary_string(size_t *len, const char *hexstr)
 {
-	int len, i;
+	int i;
 	uint8_t *buf;
-	fru_field_t *rec;
-	len = strlen(hexstr);
-	debug(3, "The custom field is marked as binary, length is %d", len);
-	if (len % 2)
+
+	if (!len) {
+		fatal("BUG: No storage for hex string length provided");
+	}
+
+	*len = strlen(hexstr);
+	debug(3, "The field is marked as binary, length is %zi", *len);
+	if (*len % 2)
 		fatal("Must provide even number of nibbles for binary data");
-	len /= 2;
-	buf = malloc(len);
+	*len /= 2;
+	buf = malloc(*len);
 	if (!buf)
-		fatal("Failed to allocate a custom buffer");
-	for (i = 0; i < len; i++) {
+		fatal("Failed to allocate a buffer for binary data");
+	for (i = 0; i < *len; i++) {
 		long byte = hex2byte(hexstr + 2 * i);
 		debug(4, "[%d] %c %c => 0x%02lX",
 		      i, hexstr[2 * i], hexstr[2 * i + 1], byte);
 		if (byte < 0)
-			fatal("Invalid hex data provided for binary custom attribute");
+			fatal("Invalid hex data provided for binary attribute");
 		buf[i] = byte;
 	}
+	return buf;
+}
+
+static
+fru_field_t * fru_encode_custom_binary_field(const char *hexstr)
+{
+	size_t len;
+	uint8_t *buf = fru_encode_binary_string(&len, hexstr);
+	fru_field_t *rec;
 	rec = fru_encode_data(len, buf);
 	free(buf);
 
@@ -540,7 +553,30 @@ int main(int argc, char *argv[])
 					json_object_object_foreachC(jstree, iter) {
 						jso = iter.val;
 						if (!strcmp(iter.key, "internal")) {
-							debug(1, "Internal area is not yet supported, JSON object skipped");
+							fru_internal_use_area_t *internal;
+							const char *data = json_object_get_string(jso);
+							if (!data) {
+								debug(2, "Internal use are w/o data, skipping");
+								continue;
+							}
+							fru_field_t *field;
+							size_t datalen;
+							char *encoded_data =
+								fru_encode_binary_string(&datalen, data);
+							size_t blocklen = FRU_BLOCKS(datalen + sizeof(*internal));
+							internal = calloc(1, FRU_BYTES(blocklen));
+							if (!internal) {
+								fatal("Failed to allocate memory for internal use area");
+							}
+							internal->ver = FRU_VER_1;
+							memcpy(internal->data, encoded_data, datalen);
+							free(encoded_data);
+							areas[FRU_INTERNAL_USE].blocks = blocklen;
+							areas[FRU_INTERNAL_USE].data = internal;
+
+							debug(2, "Internal use area data loaded from JSON");
+
+							has_internal = true;
 							continue;
 						} else if (!strcmp(iter.key, "chassis")) {
 							const char *fieldname[] = { "pn", "serial" };
@@ -755,7 +791,9 @@ int main(int argc, char *argv[])
 	debug(1, "FRU info data will be stored in %s", fname);
 
 	if (has_internal) {
-		fatal("Internal use area is not yet supported in the library");
+		debug(1, "FRU file will have an internal use area");
+		/* Nothing to do here, added for uniformity, the actual
+		 * internal use area can only be initialized from file */
 	}
 
 	if (has_chassis) {

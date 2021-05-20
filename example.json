@@ -1,5 +1,7 @@
 {
-	"internal" : null,
+	/* The internal use area, if specified, must list all the data as hex string,
+	   the length is calculated automatically */
+	"internal" : "010203040A0B0C0D",
 	"chassis" : {
 		"type": 10,
 		"pn" : "CHAS-C00L-12",
