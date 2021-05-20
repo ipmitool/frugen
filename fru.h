@@ -172,7 +172,7 @@ static inline fru_reclist_t *add_reclist(fru_reclist_t **reclist)
 
 #define FRU_VER_1    1
 #define FRU_MINIMUM_AREA_HEADER \
-	uint8_t ver:4, rsvd:4;  /**< Area format version */
+	uint8_t ver;  /**< Area format version, only lower 4 bits */
 
 #define FRU_INFO_AREA_HEADER \
 	FRU_MINIMUM_AREA_HEADER; \
