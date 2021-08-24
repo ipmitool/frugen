@@ -64,7 +64,113 @@ The limitations:
   * Internal use area is not supported
 
 For the most up-to-date information on the frugen tool invocation and options, please
-use `frugen -h`.
+use `frugen -h`, below is an example of the output of that command:
+
+```
+FRU Generator v1.3.2.g1429f89 (c) 2016-2021, Alexander Amelkin <alexander@amelkin.msk.ru>
+
+Usage: frugen [options] <filename>
+
+Options:
+
+	-h, --help
+		Display this help.
+
+	-v, --verbose
+		Increase program verbosity (debug) level.
+
+	-b, --binary
+		Mark the next --*-custom option's argument as binary.
+		Use hex string representation for the next custom argument.
+
+		Example: frugen --binary --board-custom 0012DEADBEAF
+
+		There must be an even number of characters in a 'binary' argument.
+
+	-I, --ascii
+		Disable auto-encoding on all fields, force ASCII.
+		Out of ASCII range data will still result in binary encoding.
+
+	-j, --json
+		Set input text file format to JSON (default). Specify before '--from'.
+
+	-z, --from <argument>
+		Load FRU information from a text file.
+
+	-t, --chassis-type <argument>
+		Set chassis type (hex). Defaults to 0x02 ('Unknown').
+
+	-a, --chassis-pn <argument>
+		Set chassis part number.
+
+	-c, --chassis-serial <argument>
+		Set chassis serial number.
+
+	-C, --chassis-custom <argument>
+		Add a custom chassis information field, may be used multiple times.
+
+	-n, --board-pname <argument>
+		Set board product name.
+
+	-m, --board-mfg <argument>
+		Set board manufacturer name.
+
+	-d, --board-date <argument>
+		Set board manufacturing date/time, use "DD/MM/YYYY HH:MM:SS" format.
+		By default the current system date/time is used unless -u is not specified.
+
+	-u, --board-date-unspec
+		Don't use current system date/time for board mfg. date, use 'Unspecified'.
+
+	-p, --board-pn <argument>
+		Set board part number.
+
+	-s, --board-serial <argument>
+		Set board serial number.
+
+	-f, --board-file <argument>
+		Set board FRU file ID.
+
+	-B, --board-custom <argument>
+		Add a custom board information field, may be used multiple times.
+
+	-N, --prod-name <argument>
+		Set product name.
+
+	-G, --prod-mfg <argument>
+		Set product manufacturer name.
+
+	-M, --prod-modelpn <argument>
+		Set product model / part number.
+
+	-V, --prod-version <argument>
+		Set product version.
+
+	-S, --prod-serial <argument>
+		Set product serial number.
+
+	-F, --prod-file <argument>
+		Set product FRU file ID.
+
+	-A, --prod-atag <argument>
+		Set product Asset Tag.
+
+	-P, --prod-custom <argument>
+		Add a custom product information field, may be used multiple times.
+
+	-U, --mr-uuid <argument>
+		Set System Unique ID (UUID/GUID).
+
+Example:
+	frugen --board-mfg "Biggest International Corp." \
+	       --board-pname "Some Cool Product" \
+	       --board-pn "BRD-PN-123" \
+	       --board-date "10/1/2017 12:58:00" \
+	       --board-serial "01171234" \
+	       --board-file "Command Line" \
+	       --binary --board-custom "01020304FEAD1E" \
+	       fru.bin
+```
 
 ### JSON
 
@@ -128,4 +234,8 @@ Once you have that file, build the tool as follows:
 
 ## Contact information
 
-Should you have any questions or proposals, please write to alexander [at] amelkin [dot] msk [dot] ru.
+Should you have any questions or proposals, please feel free to:
+
+ * Ask a question via https://github.com/ipmitool/frugen/discussions
+ * Submit changes as a pull request via https://github.com/ipmitool/frugen/pulls
+ * Report a problem by creating an issue at https://github.com/ipmitool/frugen/issues
