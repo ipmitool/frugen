@@ -420,13 +420,13 @@ int main(int argc, char *argv[])
 		['h'] = "Display this help",
 		['v'] = "Increase program verbosity (debug) level",
 		['b'] = "Mark the next --*-custom option's argument as binary.\n\t\t"
-			    "Use hex string representation for the next custom argument.\n\t\t"
+			    "Use hex string representation for the next custom argument.\n"
 			    "\n\t\t"
 			    "Example: frugen --binary --board-custom 0012DEADBEAF\n"
 			    "\n\t\t"
 			    "There must be an even number of characters in a 'binary' argument",
 		['I'] = "Disable auto-encoding on all fields, force ASCII.\n\t\t"
-			    "Out of ASCII range data will still result in binary encoding.",
+			    "Out of ASCII range data will still result in binary encoding",
 		['j'] = "Set input text file format to JSON (default). Specify before '--from'",
 		['z'] = "Load FRU information from a text file",
 		/* Chassis info area related options */
