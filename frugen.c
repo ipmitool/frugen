@@ -438,7 +438,7 @@ int main(int argc, char *argv[])
 		['n'] = "Set board product name",
 		['m'] = "Set board manufacturer name",
 		['d'] = "Set board manufacturing date/time, use \"DD/MM/YYYY HH:MM:SS\" format.\n\t\t"
-		        "By default the current system date/time is used unless -u is not specified",
+		        "By default the current system date/time is used unless -u is specified",
 		['u'] = "Don't use current system date/time for board mfg. date, use 'Unspecified'",
 		['p'] = "Set board part number",
 		['s'] = "Set board serial number",

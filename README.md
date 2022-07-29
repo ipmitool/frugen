@@ -117,7 +117,7 @@ Options:
 
 	-d, --board-date <argument>
 		Set board manufacturing date/time, use "DD/MM/YYYY HH:MM:SS" format.
-		By default the current system date/time is used unless -u is not specified.
+		By default the current system date/time is used unless -u is specified.
 
 	-u, --board-date-unspec
 		Don't use current system date/time for board mfg. date, use 'Unspecified'.
