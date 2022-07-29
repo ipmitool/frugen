@@ -12,6 +12,9 @@
 		]
 	},
 	"board" : {
+		/* The date, if not specified, will be taken automatically from
+		 * the current system time. You may specify the `-u` option to
+		 * `frugen` in order to leave the date 'Unspecified' */
 		/* "date" : "1/10/2016 3:00:45",*/
 		"mfg" : "Biggest International Corp.",
 		"pname" : "Some Cool Product",
