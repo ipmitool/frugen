@@ -31,6 +31,12 @@ So far supported in libfru:
   * Data decoding from all the declared formats.
     Exception: Unicode is not supported
 
+  * Internal use area creation, with the following limitations:
+
+    * Only from file
+    * Only automatic sizing, all data must be specified in
+      the input template file
+
   * Chassis information area creation
   * Board information area creation
   * Product information area creation
@@ -44,7 +50,7 @@ So far supported in libfru:
 
 NOT supported:
 
-  * Internal use area creation/reservation in a fru file buffer
+  * Internal use area creation/modification from the command line
   * Miltirecord area record types other than listed above
 
 ## frugen
@@ -182,6 +188,9 @@ general tool limitations) in a file and use it as an input for the tool:
     frugen --json --from=example.json fru.bin
 
 An example file 'example.json' is provided for your reference.
+
+NOTE: The JSON file for frugen is allowed to have C-style comments (`/* comment */`),
+which is an extension to the standard JSON format.
 
 ## Building
 
