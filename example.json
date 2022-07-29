@@ -25,6 +25,7 @@
 	"product" : {
 		"lang": 1,
 		"mfg" : "Super OEM Company",
+		"pn" : "PRD-PN-1234",
 		"pname" : "Label-engineered Super Product",
 		"serial" : "OEM12345",
 		"atag" : "Accounting Dept.",
