@@ -24,6 +24,12 @@ endif()
 
 string(REPLACE "-" "." gitver "${gitver}")
 
+option(DEBUG_OUTPUT "show extra debug output" OFF)
+
+if (DEBUG_OUTPUT)
+  add_definitions(-DDEBUG)
+endif()
+
 add_definitions(-DVERSION="${gitver}")
 
 add_executable(frugen frugen.c)
