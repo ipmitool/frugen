@@ -5,10 +5,19 @@
 	"chassis" : {
 		"type": 10,
 		"pn" : "CHAS-C00L-12",
-		"serial": "45678",
+		/* Fields may be given explicit types by setting to object with keys `type` and `data`*/
+		/* Supported types are: "bcdplus", "6bitascii" and "text" */
+		"serial": {
+		    "type": "bcdplus",
+		    "data": "45678"
+		},
 		"custom" : [
 			{ "data" : "Auto-typed text custom field" },
-			{ "type" : "binary", "data": "B14A87" }
+			{ "type" : "binary", "data": "B14A87" },
+			/* For explicit text types range is not checked, so be careful */
+			{ "type" : "bcdplus", "data": "1234" },
+			{ "type" : "6bitascii", "data": "1234" },
+			{ "type" : "text", "data": "1234" }
 		]
 	},
 	"board" : {

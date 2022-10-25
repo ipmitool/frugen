@@ -177,21 +177,47 @@ fru_field_t * fru_encode_custom_binary_field(const char *hexstr)
 static
 bool json_fill_fru_area_fields(json_object *jso, int count,
                                const char *fieldnames[],
-                               char *fields[])
+                               typed_field_t *fields[])
 {
 	int i;
 	json_object *jsfield;
 	bool data_in_this_area = false;
 	for (i = 0; i < count; i++) {
-		json_object_object_get_ex(jso, fieldnames[i], &jsfield);
-		if (jsfield) {
-			const char *s = json_object_get_string(jsfield);
-			debug(2, "Field %s '%s' loaded from JSON",
-			         fieldnames[i], s);
-			fru_loadfield(fields[i], s);
-			data_in_this_area = true;
-		}
-	}
+		if (json_object_object_get_ex(jso, fieldnames[i], &jsfield)) {
+			// field is an object
+			json_object *typefield, *valfield;
+			if (json_object_object_get_ex(jsfield, "type", &typefield) &&
+			    json_object_object_get_ex(jsfield, "data", &valfield)) {
+				// expected subfields are type and val
+				const char *type = json_object_get_string(typefield);
+				const char *val = json_object_get_string(valfield);
+				if (!strcmp("binary", type)) {
+					fatal(1, "Binary format not yet implemented");
+				} else if (!strcmp("bcdplus", type)) {
+					fields[i]->type = FIELD_TYPE_BCDPLUS;
+				} else if (!strcmp("6bitascii", type)) {
+					fields[i]->type = FIELD_TYPE_SIXBITASCII;
+				} else if (!strcmp("text", type)) {
+					fields[i]->type = FIELD_TYPE_TEXT;
+				} else {
+					debug(1, "Unknown type %s for field '%s'",
+					      type, fieldnames[i]);
+					continue;
+				}
+				fru_loadfield(fields[i]->val, val);
+				debug(2, "Field %s '%s' (%s) loaded from JSON",
+				      fieldnames[i], val, type);
+				data_in_this_area = true;
+                        } else {
+				const char *s = json_object_get_string(jsfield);
+				debug(2, "Field %s '%s' loaded from JSON",
+				      fieldnames[i], s);
+				fru_loadfield(fields[i]->val, s);
+				fields[i]->type = FIELD_TYPE_AUTO;
+				data_in_this_area = true;
+                        }
+                }
+        }
 
 	return data_in_this_area;
 }
@@ -245,8 +271,14 @@ bool json_fill_fru_area_custom(json_object *jso, fru_reclist_t **custom)
 		if (!custptr)
 			return false;
 
-		if (!strcmp(type, "binary")) {
+		if (!strcmp("binary", type)) {
 			custptr->rec = fru_encode_custom_binary_field(data);
+		} else if (!strcmp("bcdplus", type)) {
+			custptr->rec = fru_encode_data(LEN_BCDPLUS, data);
+		} else if (!strcmp("6bitascii", type)) {
+			custptr->rec = fru_encode_data(LEN_6BITASCII, data);
+		} else if (!strcmp("text", type)) {
+			custptr->rec = fru_encode_data(LEN_TEXT, data);
 		} else {
 			custptr->rec = fru_encode_data(LEN_AUTO, data);
 		}
@@ -580,7 +612,7 @@ int main(int argc, char *argv[])
 							continue;
 						} else if (!strcmp(iter.key, "chassis")) {
 							const char *fieldname[] = { "pn", "serial" };
-							char *field[] = { chassis.pn, chassis.serial };
+							typed_field_t* field[] = { &chassis.pn, &chassis.serial };
 							json_object_object_get_ex(jso, "type", &jsfield);
 							if (jsfield) {
 								chassis.type = json_object_get_int(jsfield);
@@ -592,7 +624,7 @@ int main(int argc, char *argv[])
 							has_chassis |= json_fill_fru_area_custom(jso, &chassis.cust);
 						} else if (!strcmp(iter.key, "board")) {
 							const char *fieldname[] = { "mfg", "pname", "pn", "serial", "file" };
-							char *field[] = { board.mfg, board.pname, board.pn, board.serial, board.file };
+							typed_field_t *field[] = { &board.mfg, &board.pname, &board.pn, &board.serial, &board.file };
 							/* Get values for non-string fields */
 #if 0 /* TODO: Language support is not implemented yet */
 							json_object_object_get_ex(jso, "lang", &jsfield);
@@ -616,8 +648,8 @@ int main(int argc, char *argv[])
 							has_board |= json_fill_fru_area_custom(jso, &board.cust);
 						} else if (!strcmp(iter.key, "product")) {
 							const char *fieldname[] = { "mfg", "pname", "pn", "ver", "serial", "atag", "file" };
-							char *field[] = { product.mfg, product.pname, product.pn, product.ver,
-							                  product.serial, product.atag, product.file };
+							typed_field_t *field[] = { &product.mfg, &product.pname, &product.pn, &product.ver,
+							                           &product.serial, &product.atag, &product.file };
 #if 0 /* TODO: Language support is not implemented yet */
 							/* Get values for non-string fields */
 							json_object_object_get_ex(jso, "lang", &jsfield);
@@ -653,11 +685,11 @@ int main(int argc, char *argv[])
 				has_chassis = true;
 				break;
 			case 'a': // chassis-pn
-				fru_loadfield(chassis.pn, optarg);
+				fru_loadfield(chassis.pn.val, optarg);
 				has_chassis = true;
 				break;
 			case 'c': // chassis-serial
-				fru_loadfield(chassis.serial, optarg);
+				fru_loadfield(chassis.serial.val, optarg);
 				has_chassis = true;
 				break;
 			case 'C': // chassis-custom
@@ -666,11 +698,11 @@ int main(int argc, char *argv[])
 				custom = &chassis.cust;
 				break;
 			case 'n': // board-pname
-				fru_loadfield(board.pname, optarg);
+				fru_loadfield(board.pname.val, optarg);
 				has_board = true;
 				break;
 			case 'm': // board-mfg
-				fru_loadfield(board.mfg, optarg);
+				fru_loadfield(board.mfg.val, optarg);
 				has_board = true;
 				break;
 			case 'd': // board-date
@@ -683,15 +715,15 @@ int main(int argc, char *argv[])
 				no_curr_date = true;
 				break;
 			case 'p': // board-pn
-				fru_loadfield(board.pn, optarg);
+				fru_loadfield(board.pn.val, optarg);
 				has_board = true;
 				break;
 			case 's': // board-sn
-				fru_loadfield(board.serial, optarg);
+				fru_loadfield(board.serial.val, optarg);
 				has_board = true;
 				break;
 			case 'f': // board-file
-				fru_loadfield(board.file, optarg);
+				fru_loadfield(board.file.val, optarg);
 				has_board = true;
 				break;
 			case 'B': // board-custom
@@ -700,31 +732,31 @@ int main(int argc, char *argv[])
 				custom = &board.cust;
 				break;
 			case 'N': // prod-name
-				fru_loadfield(product.pname, optarg);
+				fru_loadfield(product.pname.val, optarg);
 				has_product = true;
 				break;
 			case 'G': // prod-mfg
-				fru_loadfield(product.mfg, optarg);
+				fru_loadfield(product.mfg.val, optarg);
 				has_product = true;
 				break;
 			case 'M': // prod-modelpn
-				fru_loadfield(product.pn, optarg);
+				fru_loadfield(product.pn.val, optarg);
 				has_product = true;
 				break;
 			case 'V': // prod-version
-				fru_loadfield(product.ver, optarg);
+				fru_loadfield(product.ver.val, optarg);
 				has_product = true;
 				break;
 			case 'S': // prod-serial
-				fru_loadfield(product.serial, optarg);
+				fru_loadfield(product.serial.val, optarg);
 				has_product = true;
 				break;
 			case 'F': // prod-file
-				fru_loadfield(product.file, optarg);
+				fru_loadfield(product.file.val, optarg);
 				has_product = true;
 				break;
 			case 'A': // prod-atag
-				fru_loadfield(product.atag, optarg);
+				fru_loadfield(product.atag.val, optarg);
 				has_product = true;
 				break;
 			case 'P': // prod-custom

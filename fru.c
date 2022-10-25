@@ -69,7 +69,9 @@ static inline uint8_t fru_field_copy(void *dest, const fru_field_t *fieldp)
  *
  */
 static
-uint8_t fru_get_typelen(int len,             /**< [in] Length of the data or LEN_AUTO for pure text zero-terminated data */
+uint8_t fru_get_typelen(int len,             /**< [in] Length of the data,
+						LEN_AUTO for pure text zero-terminated data or
+						one of LEN_BCDPLUS, LEN_6BITASCII, LEN_TEXT for explicit text type */
                         const uint8_t *data) /**< [in] The input data */
 {
 	uint8_t typelen = len;
@@ -77,6 +79,24 @@ uint8_t fru_get_typelen(int len,             /**< [in] Length of the data or LEN
 
 	if (!data)
 		return FRU_FIELD_EMPTY;
+
+	if (len < 0) {
+		DEBUG("Forcing string '%s' to ...\n", (char *)data);
+		// Explicit text type
+                if (len == LEN_BCDPLUS) {
+			DEBUG("BCDPLUS type\n");
+			return FRU_TYPELEN(BCDPLUS, (strlen(data) + 1) / 2);
+                } else if (len == LEN_6BITASCII) {
+			DEBUG("6BIT ASCII type\n");
+			return FRU_TYPELEN(ASCII_6BIT, FRU_6BIT_LENGTH(strlen(data)));
+                } else if (len == LEN_TEXT) {
+			DEBUG("ASCII type\n");
+			return FRU_TYPELEN(TEXT, strlen(data));
+                } else {
+			DEBUG("Nothing... Unknown text type\n");
+			return FRU_FIELD_TERMINATOR;
+		}
+	}
 
 	if (!len) {
 		len = strlen(data);
@@ -96,6 +116,8 @@ uint8_t fru_get_typelen(int len,             /**< [in] Length of the data or LEN
 		DEBUG("Binary data due to non-zero length\n");
 		return FRU_TYPELEN(BINARY, len);
 	}
+
+	DEBUG("Guessing type of string '%s'...\n", (char *)data);
 
 	// As we reach this point, we know the data must be text.
 	// We will try to find the encoding that suits best.
@@ -432,7 +454,7 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
                                       const struct timeval *tv, ///< [in] Manufacturing time since the Epoch (1970/01/01 00:00:00 +0000 UTC) for areas that use it (board)
                                       fru_reclist_t *fields,   ///< [in] Single-linked list of data fields
                                       size_t nstrings,         ///< [in] Number of strings for mandatory fields
-                                      const unsigned char *strings[]) ///<[in] Array of strings for mandatory fields
+                                      const typed_field_t strings[]) ///<[in] Array of typed strings for mandatory fields
 {
 	int i = 0;
 	int field_count;
@@ -497,7 +519,30 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
 	     field && !field->rec && field_count < nstrings;
 	     field = field->next, field_count++)
 	{
-		field->rec = fru_encode_data(LEN_AUTO, strings[field_count]);
+		int len = LEN_AUTO;
+		switch (strings[field_count].type) {
+			case FIELD_TYPE_BINARY: {
+				DEBUG("binary format not yet implemented\n");
+				errno = EINVAL;
+				goto err;
+			}
+			case FIELD_TYPE_BCDPLUS: {
+				len = LEN_BCDPLUS;
+				break;
+			}
+			case FIELD_TYPE_SIXBITASCII: {
+				len = LEN_6BITASCII;
+				break;
+			}
+			case FIELD_TYPE_TEXT: {
+				len = LEN_TEXT;
+				break;
+			}
+			default:
+				len = LEN_AUTO;
+				break;
+		}
+		field->rec = fru_encode_data(len, strings[field_count].val);
 		if (!field->rec) goto err;
 	}
 
@@ -577,7 +622,7 @@ fru_chassis_area_t * fru_chassis_info(const fru_exploded_chassis_t *chassis) ///
 		[FRU_CHASSIS_SERIAL] = { NULL, chassis->cust },
 	};
 
-	const unsigned char *strings[] = { chassis->pn, chassis->serial };
+	const typed_field_t strings[] = { chassis->pn, chassis->serial };
 	fru_chassis_area_t *out = NULL;
 
 	if (!SMBIOS_CHASSIS_IS_VALID(chassis->type)) {
@@ -627,7 +672,7 @@ fru_board_area_t * fru_board_info(const fru_exploded_board_t *board) ///< [in] E
 		[FRU_BOARD_FILE]     = { NULL, board->cust },
 	};
 
-	const unsigned char *strings[] = { board->mfg, board->pname, board->serial, board->pn, board->file };
+	const typed_field_t strings[] = { board->mfg, board->pname, board->serial, board->pn, board->file };
 	fru_board_area_t *out = NULL;
 
 	out = (fru_board_area_t *)fru_create_info_area(FRU_BOARD_INFO,
@@ -674,10 +719,10 @@ fru_product_area_t * fru_product_info(const fru_exploded_product_t *product) ///
 		[FRU_PROD_FILE]    = { NULL, product->cust },
 	};
 
-	const unsigned char *strings[] = { product->mfg, product->pname,
-	                                   product->pn, product->ver,
-	                                   product->serial, product->atag,
-	                                   product->file };
+	const typed_field_t strings[] = { product->mfg, product->pname,
+	                                  product->pn, product->ver,
+	                                  product->serial, product->atag,
+	                                  product->file };
 	fru_product_area_t *out = NULL;
 
 	out = fru_create_info_area(FRU_PRODUCT_INFO,
