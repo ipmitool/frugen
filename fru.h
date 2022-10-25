@@ -260,6 +260,9 @@ typedef fru_mr_rec_t fru_mr_area_t; /// Intended for use as a pointer only
 #define FRU_ISTYPE(t, type)   (FRU_TYPE(t) == __TYPE_##type)
 
 #define LEN_AUTO              0
+#define LEN_BCDPLUS           -1
+#define LEN_6BITASCII         -2
+#define LEN_TEXT              -3
 
 #define FRU_6BIT_LENGTH(len)    (((len) * 3 + 3) / 4)
 #define FRU_6BIT_FULLLENGTH(l6) (((l6) * 4) / 3)
@@ -271,32 +274,43 @@ typedef fru_mr_rec_t fru_mr_area_t; /// Intended for use as a pointer only
 #define FRU_BLOCKS(bytes)  (((bytes) + FRU_BLOCK_SZ - 1) / FRU_BLOCK_SZ)
 
 typedef struct {
+	enum {
+		FIELD_TYPE_AUTO,
+		FIELD_TYPE_BINARY,
+		FIELD_TYPE_BCDPLUS,
+		FIELD_TYPE_SIXBITASCII,
+		FIELD_TYPE_TEXT
+	} type;
+	unsigned char val[FRU_FIELDMAXARRAY];
+} typed_field_t;
+
+typedef struct {
 	uint8_t type;
-	unsigned char pn[FRU_FIELDMAXARRAY];
-	unsigned char serial[FRU_FIELDMAXARRAY];
+	typed_field_t pn;
+	typed_field_t serial;
 	fru_reclist_t *cust;
 } fru_exploded_chassis_t;
 
 typedef struct {
 	uint8_t lang;
 	struct timeval tv;
-	unsigned char mfg[FRU_FIELDMAXARRAY];
-	unsigned char pname[FRU_FIELDMAXARRAY];
-	unsigned char serial[FRU_FIELDMAXARRAY];
-	unsigned char pn[FRU_FIELDMAXARRAY];
-	unsigned char file[FRU_FIELDMAXARRAY];
+	typed_field_t mfg;
+	typed_field_t pname;
+	typed_field_t serial;
+	typed_field_t pn;
+	typed_field_t file;
 	fru_reclist_t *cust;
 } fru_exploded_board_t;
 
 typedef struct {
 	uint8_t lang;
-	unsigned char mfg[FRU_FIELDMAXARRAY];
-	unsigned char pname[FRU_FIELDMAXARRAY];
-	unsigned char pn[FRU_FIELDMAXARRAY];
-	unsigned char ver[FRU_FIELDMAXARRAY];
-	unsigned char serial[FRU_FIELDMAXARRAY];
-	unsigned char atag[FRU_FIELDMAXARRAY];
-	unsigned char file[FRU_FIELDMAXARRAY];
+	typed_field_t mfg;
+	typed_field_t pname;
+	typed_field_t pn;
+	typed_field_t ver;
+	typed_field_t serial;
+	typed_field_t atag;
+	typed_field_t file;
 	fru_reclist_t *cust;
 } fru_exploded_product_t;
 
