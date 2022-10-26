@@ -43,6 +43,7 @@
 		"pname" : "Label-engineered Super Product",
 		"serial" : "OEM12345",
 		"atag" : "Accounting Dept.",
+		"ver" : "v1.1",
 		"file" : "example2.json",
 		"custom" : [
 			{ "type" : "auto",   "data" : "Product Custom 1" },
