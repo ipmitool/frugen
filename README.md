@@ -68,6 +68,10 @@ The limitations:
     is automatically selected based on the byte range of the provided data. Custom fields
     may be forced to be binary using --binary option.
   * Internal use area is not supported
+  * You should specify the UUID and the custom fields in either
+    the template file OR in the command line. The command line does
+    NOT override the template file in that regard, but creates an additional
+    UUID or custom record, which may be undesirable
 
 For the most up-to-date information on the frugen tool invocation and options, please
 use `frugen -h`, below is an example of the output of that command:
