@@ -199,7 +199,7 @@ typedef fru_info_area_t fru_chassis_area_t;
 
 typedef struct fru_board_area_s {
 	FRU_INFO_AREA_HEADER;
-	uint8_t mfgdate[3]; ///< Manufacturing date/time in seconds since 1996/1/1 0:00
+	uint8_t mfgdate[3]; ///< Manufacturing date/time in minutes since 1996/1/1 0:00
 	uint8_t data[];     ///< Variable size (multiple of 8 bytes) data with tail padding and checksum
 } fru_board_area_t;
 
