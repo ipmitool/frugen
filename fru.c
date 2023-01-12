@@ -96,11 +96,11 @@ static inline uint8_t fru_field_copy(void *dest, const fru_field_t *fieldp)
  * @retval FRU_FIELD_TERMINATOR The data exceeded the maximum length (63 bytes)
  *
  */
-static
-uint8_t fru_get_typelen(int len,             /**< [in] Length of the data,
-						LEN_AUTO for pure text zero-terminated data or
-						one of LEN_BCDPLUS, LEN_6BITASCII, LEN_TEXT for explicit text type */
-                        const uint8_t *data) /**< [in] The input data */
+static uint8_t
+fru_get_typelen(int len,             /**< [in] Length of the data,
+                                          LEN_AUTO for pure text zero-terminated data or
+                                          one of LEN_BCDPLUS, LEN_6BITASCII, LEN_TEXT for explicit text type */
+                const uint8_t *data) /**< [in] The input data */
 {
 	uint8_t typelen = len;
 	int i;
@@ -111,16 +111,16 @@ uint8_t fru_get_typelen(int len,             /**< [in] Length of the data,
 	if (len < 0) {
 		DEBUG("Forcing string '%s' to ...\n", (char *)data);
 		// Explicit text type
-                if (len == LEN_BCDPLUS) {
+		if (len == LEN_BCDPLUS) {
 			DEBUG("BCDPLUS type\n");
 			return FRU_TYPELEN(BCDPLUS, (strlen(data) + 1) / 2);
-                } else if (len == LEN_6BITASCII) {
+		} else if (len == LEN_6BITASCII) {
 			DEBUG("6BIT ASCII type\n");
 			return FRU_TYPELEN(ASCII_6BIT, FRU_6BIT_LENGTH(strlen(data)));
-                } else if (len == LEN_TEXT) {
+		} else if (len == LEN_TEXT) {
 			DEBUG("ASCII type\n");
 			return FRU_TYPELEN(TEXT, strlen(data));
-                } else {
+		} else {
 			DEBUG("Nothing... Unknown text type\n");
 			return FRU_FIELD_TERMINATOR;
 		}
@@ -162,9 +162,9 @@ uint8_t fru_get_typelen(int len,             /**< [in] Length of the data,
 	// Go through the data and expand charset as needed
 	for (i = 0; i < len; i++) {
 		if (data[i] < ' '
-			&& data[i] != '\t'
-			&& data[i] != '\r'
-			&& data[i] != '\n')
+		    && data[i] != '\t'
+		    && data[i] != '\r'
+		    && data[i] != '\n')
 		{
 			// They lied! The data is binary!
 			// That's the widest range type.
@@ -176,7 +176,7 @@ uint8_t fru_get_typelen(int len,             /**< [in] Length of the data,
 
 		if (autodetect) {
 			if (typelen < FRU_MAKETYPE(TEXT)
-				&& (data[i] > '_' || data[i] < ' '))
+			    && (data[i] > '_' || data[i] < ' '))
 			{ // Do not reduce the range
 				// The data doesn't fit into 6-bit ASCII, expand to simple text.
 				DEBUG("[%c] Data is simple text!\n", data[i]);
@@ -211,8 +211,7 @@ static fru_field_t *fru_encode_6bit(const unsigned char *s /**< [in] Input strin
 	fru_field_t *out = NULL;
 	size_t outlen = sizeof(fru_field_t) + len6bit + 1; // 1 extra for null-byte
 
-	if (len6bit > FRU_FIELDDATALEN(len6bit) ||
-	    !(out = calloc(1, outlen)))
+	if (len6bit > FRU_FIELDDATALEN(len6bit) || !(out = calloc(1, outlen)))
 	{
 		return out;
 	}
@@ -321,8 +320,8 @@ bool fru_decode_6bit(const fru_field_t *field,
  */
 static
 bool fru_decode_bcdplus(const fru_field_t *field,
-			uint8_t *out,
-			size_t out_len)
+                        uint8_t *out,
+                        size_t out_len)
 {
 	int i;
 	uint8_t c;
@@ -369,8 +368,8 @@ bool fru_decode_bcdplus(const fru_field_t *field,
  */
 static
 bool fru_decode_binary(const fru_field_t *field,
-		       uint8_t *out,
-		       size_t out_len)
+                       uint8_t *out,
+                       size_t out_len)
 {
 	int i;
 	uint8_t c;
@@ -448,8 +447,8 @@ fru_field_t * fru_encode_data(int len, const uint8_t *data)
 }
 
 bool fru_decode_data(fru_field_t *field,
-		     typed_field_t *out,
-		     size_t out_len)
+                     typed_field_t *out,
+                     size_t out_len)
 {
 	if (!field) return false;
 
@@ -541,11 +540,11 @@ uint8_t fru_area_checksum(fru_info_area_t *area)
  */
 static
 fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area type (FRU_[CHASSIS|BOARD|PRODUCT]_INFO)
-				      uint8_t langtype,         ///< [in] Language code for areas that use it (board, product) or Chassis Type for chassis info area
-				      const struct timeval *tv, ///< [in] Manufacturing time since the Epoch (1970/01/01 00:00:00 +0000 UTC) for areas that use it (board)
-				      fru_reclist_t *fields,   ///< [in] Single-linked list of data fields
-				      size_t nstrings,         ///< [in] Number of strings for mandatory fields
-				      const typed_field_t strings[]) ///<[in] Array of typed strings for mandatory fields
+                                      uint8_t langtype,         ///< [in] Language code for areas that use it (board, product) or Chassis Type for chassis info area
+                                      const struct timeval *tv, ///< [in] Manufacturing time since the Epoch (1970/01/01 00:00:00 +0000 UTC) for areas that use it (board)
+                                      fru_reclist_t *fields,   ///< [in] Single-linked list of data fields
+                                      size_t nstrings,         ///< [in] Number of strings for mandatory fields
+                                      const typed_field_t strings[]) ///<[in] Array of typed strings for mandatory fields
 {
 	int i = 0;
 	int field_count;
@@ -768,13 +767,13 @@ bool fru_decode_chassis_info(
 	fru_field_t *field = (fru_field_t*)data;
 
 	if(!fru_decode_data(field, &chassis_out->pn,
-			    sizeof(chassis_out->pn.val)))
+	                    sizeof(chassis_out->pn.val)))
 		return false;
 
 	data += FRU_FIELDSIZE(field->typelen);
 	field = (fru_field_t*)data;
 	if (!fru_decode_data(field, &chassis_out->serial,
-			     sizeof(chassis_out->serial.val)))
+	                     sizeof(chassis_out->serial.val)))
 		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
@@ -829,7 +828,7 @@ fru_board_area_t * fru_encode_board_info(const fru_exploded_board_t *board) ///<
 }
 
 bool fru_decode_board_info(const fru_board_area_t *area,
-			   fru_exploded_board_t *board_out)
+                           fru_exploded_board_t *board_out)
 {
 	fru_field_t *field;
 	const uint8_t *data = area->data;
@@ -850,31 +849,31 @@ bool fru_decode_board_info(const fru_board_area_t *area,
 
 	field = (fru_field_t*)data;
 	if (!fru_decode_data(field, &board_out->mfg,
-			     sizeof(board_out->mfg.val)))
+	                     sizeof(board_out->mfg.val)))
 		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
 	field = (fru_field_t*)data;
 	if (!fru_decode_data(field, &board_out->pname,
-			     sizeof(board_out->pname.val)))
+	                     sizeof(board_out->pname.val)))
 		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
 	field = (fru_field_t*)data;
 	if (!fru_decode_data(field, &board_out->serial,
-			     sizeof(board_out->serial.val)))
+	                     sizeof(board_out->serial.val)))
 		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
 	field = (fru_field_t*)data;
 	if (!fru_decode_data(field, &board_out->pn,
-			     sizeof(board_out->pn.val)))
+	                     sizeof(board_out->pn.val)))
 		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
 	field = (fru_field_t*)data;
 	if (!fru_decode_data(field, &board_out->file,
-			     sizeof(board_out->file.val)))
+	                     sizeof(board_out->file.val)))
 		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
@@ -901,7 +900,7 @@ bool fru_decode_board_info(const fru_board_area_t *area,
  * @returns fru_info_area_t *area A newly allocated buffer containing the created area
  *
  */
-fru_product_area_t * fru_product_info(const fru_exploded_product_t *product) ///< [in] Exploded product information area
+fru_product_area_t * fru_encode_product_info(const fru_exploded_product_t *product) ///< [in] Exploded product information area
 {
 	int i;
 
@@ -920,10 +919,11 @@ fru_product_area_t * fru_product_info(const fru_exploded_product_t *product) ///
 		[FRU_PROD_FILE]    = { NULL, product->cust },
 	};
 
-	const typed_field_t strings[] = { product->mfg, product->pname,
-	                                  product->pn, product->ver,
-	                                  product->serial, product->atag,
-	                                  product->file };
+	const typed_field_t strings[] = {
+		product->mfg, product->pname,
+		product->pn, product->ver,
+		product->serial, product->atag,
+		product->file };
 	fru_product_area_t *out = NULL;
 
 	out = fru_create_info_area(FRU_PRODUCT_INFO,
@@ -1124,43 +1124,43 @@ bool fru_decode_product_info(
 
 	field = (fru_field_t*)data;
 	if (!fru_decode_data(field, &product_out->mfg,
-			     sizeof(product_out->mfg.val)))
+	                     sizeof(product_out->mfg.val)))
 		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
 	field = (fru_field_t*)data;
 	if (!fru_decode_data(field, &product_out->pname,
-			     sizeof(product_out->pname.val)))
+	                     sizeof(product_out->pname.val)))
 		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
 	field = (fru_field_t*)data;
 	if (!fru_decode_data(field, &product_out->pn,
-			     sizeof(product_out->pn.val)))
+	                     sizeof(product_out->pn.val)))
 		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
 	field = (fru_field_t*)data;
 	if (!fru_decode_data(field, &product_out->ver,
-			     sizeof(product_out->ver.val)))
+	                     sizeof(product_out->ver.val)))
 		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
 	field = (fru_field_t*)data;
 	if (!fru_decode_data(field, &product_out->serial,
-			     sizeof(product_out->serial.val)))
+	                     sizeof(product_out->serial.val)))
 		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
 	field = (fru_field_t*)data;
 	if (!fru_decode_data(field, &product_out->atag,
-			     sizeof(product_out->atag.val)))
+	                     sizeof(product_out->atag.val)))
 		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
 	field = (fru_field_t*)data;
 	if (!fru_decode_data(field, &product_out->file,
-			     sizeof(product_out->file.val)))
+	                     sizeof(product_out->file.val)))
 		return false;
 	data += FRU_FIELDSIZE(field->typelen);
 
@@ -1211,7 +1211,7 @@ fru_t * fru_create(fru_area_t area[FRU_MAX_AREAS], size_t *size)
 		if(!data ||                                // No data is provided or
 		   !FRU_AREA_HAS_SIZE(atype) && !blocks || // no size is given for a non-sized area or
 		   !((fru_info_area_t *)data)->blocks     // the sized area contains a zero size
-		  ) {
+		) {
 			// Mark the area as
 			*offset = 0;
 			continue;
@@ -1248,8 +1248,7 @@ fru_t * fru_create(fru_area_t area[FRU_MAX_AREAS], size_t *size)
 		if (!blocks) continue;
 
 		DEBUG("copying %d bytes of area of type %d to offset 0x%03X (0x%03lX)\n",
-		      FRU_BYTES(blocks), atype, FRU_BYTES(*offset), dst - (uint8_t *)out
-		      );
+		      FRU_BYTES(blocks), atype, FRU_BYTES(*offset), dst - (uint8_t *)out);
 		memcpy(dst, data, FRU_BYTES(blocks));
 	}
 
@@ -1342,7 +1341,7 @@ void test_encodings(void)
 
 	for(i = 0; i < ARRAY_SZ(test_strings); i++) {
 		fru_field_t *field;
-		const unsigned char *out;
+		const unsigned char out[FRU_FIELDMAXARRAY];
 
 		printf("Data set %d.\n", i);
 		printf("Original data ");

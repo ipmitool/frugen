@@ -202,7 +202,7 @@ json_object_to_fd(int fd, struct json_object *obj, int flags)
 	wpos = 0;
 	while(wpos < wsize) {
 		if((ret = write(fd, json_str + wpos, wsize-wpos)) < 0) {
-		  return -1;
+			return -1;
 		}
 
 		/* because of the above check for ret < 0, we can safely cast and add */
@@ -247,16 +247,16 @@ bool json_fill_fru_area_fields(json_object *jso, int count,
 				debug(2, "Field %s '%s' (%s) loaded from JSON",
 				      fieldnames[i], val, type);
 				data_in_this_area = true;
-                        } else {
+			} else {
 				const char *s = json_object_get_string(jsfield);
 				debug(2, "Field %s '%s' loaded from JSON",
 				      fieldnames[i], s);
 				fru_loadfield(fields[i]->val, s);
 				fields[i]->type = FIELD_TYPE_AUTO;
 				data_in_this_area = true;
-                        }
-                }
-        }
+			}
+		}
+	}
 
 	return data_in_this_area;
 }
@@ -420,9 +420,9 @@ out:
 
 static
 int json_object_add_with_type(struct json_object* obj,
-			      const char* key,
-			      const unsigned char* val,
-			      int type) {
+                              const char* key,
+                              const unsigned char* val,
+                              int type) {
 	struct json_object *string, *type_string, *entry;
 	if ((string = json_object_new_string(val)) == NULL)
 		goto STRING_ERR;
@@ -918,7 +918,7 @@ int main(int argc, char *argv[])
 			}
 			has_multirec = true;
 
-		    switch(opt) {
+			switch(opt) {
 				case 'U': // UUID
 					errno = fru_mr_uuid2rec(&mr_reclist_tail->rec, optarg);
 					if (errno) {
@@ -970,7 +970,7 @@ int main(int argc, char *argv[])
 			fru_reclist_t *next = chassis.cust;
 			while (next != NULL) {
 				json_object_add_with_type(temp_obj, NULL, next->rec->data,
-							  typelen2ind(next->rec->typelen));
+				                          typelen2ind(next->rec->typelen));
 				next = next->next;
 			}
 			json_object_object_add(section, "custom", temp_obj);
@@ -992,7 +992,7 @@ int main(int argc, char *argv[])
 			fru_reclist_t *next = product.cust;
 			while (next != NULL) {
 				json_object_add_with_type(temp_obj, NULL, next->rec->data,
-							  typelen2ind(next->rec->typelen));
+				                          typelen2ind(next->rec->typelen));
 				next = next->next;
 			}
 			json_object_object_add(section, "custom", temp_obj);
@@ -1013,7 +1013,7 @@ int main(int argc, char *argv[])
 			fru_reclist_t *next = board.cust;
 			while (next != NULL) {
 				json_object_add_with_type(temp_obj, NULL, next->rec->data,
-							  typelen2ind(next->rec->typelen));
+				                          typelen2ind(next->rec->typelen));
 				next = next->next;
 			}
 			json_object_object_add(section, "custom", temp_obj);
@@ -1185,11 +1185,11 @@ int main(int argc, char *argv[])
 
 		fd = open(fname,
 #if __WIN32__ || __WIN64__
-			  O_CREAT | O_TRUNC | O_WRONLY | O_BINARY,
+		          O_CREAT | O_TRUNC | O_WRONLY | O_BINARY,
 #else
-			  O_CREAT | O_TRUNC | O_WRONLY,
+		          O_CREAT | O_TRUNC | O_WRONLY,
 #endif
-			  0644);
+		          0644);
 
 		if (fd < 0)
 			fatal("Couldn't create file %s: %m", fname);
