@@ -182,6 +182,7 @@ static inline fru_reclist_t *add_reclist(fru_reclist_t **reclist)
 
 #define LANG_DEFAULT 0
 #define LANG_ENGLISH 25
+#define FRU_TYPE_EOF 0xc1
 
 typedef struct fru_info_area_s { // The generic info area structure
 	FRU_INFO_AREA_HEADER;
@@ -199,7 +200,7 @@ typedef fru_info_area_t fru_chassis_area_t;
 
 typedef struct fru_board_area_s {
 	FRU_INFO_AREA_HEADER;
-	uint8_t mfgdate[3]; ///< Manufacturing date/time in seconds since 1996/1/1 0:00
+	uint8_t mfgdate[3]; ///< Manufacturing date/time in minutes since 1996/1/1 0:00
 	uint8_t data[];     ///< Variable size (multiple of 8 bytes) data with tail padding and checksum
 } fru_board_area_t;
 
@@ -273,14 +274,23 @@ typedef fru_mr_rec_t fru_mr_area_t; /// Intended for use as a pointer only
 #define FRU_BYTES(blocks) ((blocks) * FRU_BLOCK_SZ)
 #define FRU_BLOCKS(bytes)  (((bytes) + FRU_BLOCK_SZ - 1) / FRU_BLOCK_SZ)
 
+typedef enum {
+    FIELD_TYPE_AUTO,
+    FIELD_TYPE_BINARY = (__TYPE_BINARY + 1),
+    BASE_FIELD_TYPE = FIELD_TYPE_BINARY,
+    FIELD_TYPE_BCDPLUS = (__TYPE_BCDPLUS + 1),
+    FIELD_TYPE_SIXBITASCII = (__TYPE_ASCII_6BIT + 1),
+    FIELD_TYPE_TEXT = (__TYPE_TEXT + 1),
+    TOTAL_FIELD_TYPES
+} field_type_t;
+
+extern const char* enc_names[TOTAL_FIELD_TYPES];
+
+/// Extract FRU field type as field_type_t
+#define FIELD_TYPE_T(t) (FRU_TYPE(t) + BASE_FIELD_TYPE)
+
 typedef struct {
-	enum {
-		FIELD_TYPE_AUTO,
-		FIELD_TYPE_BINARY,
-		FIELD_TYPE_BCDPLUS,
-		FIELD_TYPE_SIXBITASCII,
-		FIELD_TYPE_TEXT
-	} type;
+	field_type_t type;
 	unsigned char val[FRU_FIELDMAXARRAY];
 } typed_field_t;
 
@@ -326,7 +336,135 @@ int fru_mr_uuid2rec(fru_mr_rec_t **rec, const unsigned char *str);
 fru_mr_reclist_t * add_mr_reclist(fru_mr_reclist_t **reclist);
 fru_mr_area_t * fru_mr_area(fru_mr_reclist_t *reclist, size_t *total);
 
+/**
+ * @brief Encode chassis info into binary buffer.
+ *
+ * Binary buffer needs to be freed after use.
+ *
+ * @param[in] chassis Area info.
+ * @return Encoded area buffer.
+ * @retval NULL Encoding failed. \p errno is set accordingly.
+ */
+fru_chassis_area_t * fru_encode_chassis_info(const fru_exploded_chassis_t *chassis);
+
+/**
+ * @brief Encode board info into binary buffer.
+ *
+ * Binary buffer needs to be freed after use.
+ *
+ * @param[in] board Area info.
+ * @return Encoded area buffer.
+ * @retval NULL Encoding failed. \p errno is set accordingly.
+ */
+fru_board_area_t * fru_encode_board_info(const fru_exploded_board_t *board);
+
+/**
+ * @brief Encode product info into binary buffer.
+ *
+ * Binary buffer needs to be freed after use.
+ *
+ * @param[in] product Area info.
+ * @return Encoded area buffer.
+ * @retval NULL Encoding failed. \p errno is set accordingly.
+ */
+fru_product_area_t * fru_encode_product_info(const fru_exploded_product_t *product);
+
+/**
+ * @brief Encode data field.
+ *
+ * Binary buffer needs to be freed after use.
+ *
+ * @param[in] len Binary buffer length.
+ * @param[in] data Binary buffer.
+ * @return Encoded field buffer.
+ * @retval NULL Encoding error. \p errno is set accordingly.
+ */
 fru_field_t * fru_encode_data(int len, const uint8_t *data);
+
 fru_t * fru_create(fru_area_t area[FRU_MAX_AREAS], size_t *size);
+
+/**
+ * @brief Find and validate FRU header in the byte buffer.
+ *
+ * @param[in] buffer Byte buffer.
+ * @param[in] size Byte buffer size.
+ * @return Pointer to the FRU header in the buffer.
+ * @retval NULL FRU header not found. \p errno is set accordingly.
+ */
+fru_t *find_fru_header(uint8_t *buffer, size_t size);
+
+/**
+ * @brief Find and validate FRU chassis area in the byte buffer.
+ *
+ * @param[in] buffer Byte buffer.
+ * @param[in] size Byte buffer size.
+ * @return Pointer to the FRU chassis area in the buffer.
+ * @retval NULL FRU chassis area not found. \p errno is set accordingly.
+ */
+fru_chassis_area_t *find_fru_chassis_area(uint8_t *buffer, size_t size);
+
+/**
+ * @brief Find and validate FRU board area in the byte buffer.
+ *
+ * @param[in] buffer Byte buffer.
+ * @param[in] size Byte buffer size.
+ * @return Pointer to the FRU board area in the buffer.
+ * @retval NULL FRU board area not found. \p errno is set accordingly.
+ */
+fru_board_area_t *find_fru_board_area(uint8_t *buffer, size_t size);
+
+/**
+ * @brief Find and validate FRU product area in the byte buffer.
+ *
+ * @param[in] buffer Byte buffer.
+ * @param[in] size Byte buffer size.
+ * @return Pointer to the FRU product area in the buffer.
+ * @retval NULL FRU product area not found. \p errno is set accordingly.
+ */
+fru_product_area_t *find_fru_product_area(uint8_t *buffer, size_t size);
+
+/**
+ * @brief Decode chassis area into \p fru_exploded_chassis_t.
+ *
+ * @param[in] area Encoded area.
+ * @param[out] chassis_out Decoded structure.
+ * @retval true Success.
+ * @retval false Failure.
+ */
+bool fru_decode_chassis_info(const fru_chassis_area_t *area, fru_exploded_chassis_t *chassis_out);
+
+/**
+ * @brief Decode board area into \p fru_exploded_board_t.
+ *
+ * @param[in] area Encoded area.
+ * @param[out] chassis_out Decoded structure.
+ * @retval true Success.
+ * @retval false Failure.
+ */
+bool fru_decode_board_info(const fru_board_area_t *area, fru_exploded_board_t *board_out);
+
+/**
+ * @brief Decode product area into \p fru_product_board_t.
+ *
+ * @param[in] area Encoded area.
+ * @param[out] chassis_out Decoded structure.
+ * @retval true Success.
+ * @retval false Failure.
+ */
+bool fru_decode_product_info(const fru_product_area_t *area, fru_exploded_product_t *product_out);
+
+/**
+ * Decode data from a buffer into another buffer.
+ *
+ * For binary data use FRU_FIELDDATALEN(field->typelen) to find
+ * out the size of valid bytes in the returned buffer.
+ *
+ * @param[in] field Encoded data field.
+ * @param[out] out Decoded field.
+ * @param[in] out_len Size of the decoded field region.
+ * @retval true Success.
+ * @retval false Failure.
+ */
+bool fru_decode_data(fru_field_t *field, typed_field_t *out, size_t out_len);
 
 #endif // __FRULIB_FRU_H__
