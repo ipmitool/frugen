@@ -495,7 +495,7 @@ fru_info_area_t *fru_create_info_area(fru_area_type_t atype,    ///< [in] Area t
 		 * It's assumed here that UNIX time 0 (Jan 1st of 1970)
 		 * can never actually happen in a FRU file in 2018.
 		 */
-		if (!memcmp(&tv_unspecified, tv, sizeof(tv))) {
+		if (!memcmp(&tv_unspecified, tv, sizeof(*tv))) {
 			printf("Using FRU_DATE_UNSPECIFIED\n");
 			fru_time = FRU_DATE_UNSPECIFIED;
 		} else {
