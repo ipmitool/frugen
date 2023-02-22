@@ -192,7 +192,7 @@ bool json_fill_fru_area_fields(json_object *jso, int count,
 				const char *type = json_object_get_string(typefield);
 				const char *val = json_object_get_string(valfield);
 				if (!strcmp("binary", type)) {
-					fatal(1, "Binary format not yet implemented");
+					fatal("Binary format not yet implemented");
 				} else if (!strcmp("bcdplus", type)) {
 					fields[i]->type = FIELD_TYPE_BCDPLUS;
 				} else if (!strcmp("6bitascii", type)) {
